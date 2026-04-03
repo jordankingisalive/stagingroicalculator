@@ -223,16 +223,6 @@ function flattenData(rows) {
         // Find the org/team column — first column that isn't date-prefixed
         const orgColumn = headers.find(h => !dateColumnPattern.test(h)) || headers[0];
 
-        // Use the LAST (most recent) date's columns for current state
-        const latestDate = sortedDates[sortedDates.length - 1];
-        const latestCols = dateMetricMap[latestDate];
-        console.log(`Using most recent date: ${latestDate}`);
-
-        const enabledUsersCol = latestCols['Enabled Users'];
-        const activeUsersPercentCol = latestCols['% Active Users'];
-        const avgActionsCol = latestCols['Avg Copilot Actions'];
-        const powerUsersPercentCol = latestCols['% Power Users'];
-
         const orgWeeklyData = {};
 
         const flattenedData = rows
@@ -243,10 +233,29 @@ function flattenData(rows) {
             })
             .map(row => {
                 const orgName = (row[orgColumn] || '').trim();
-                const enabledUsers = parseNumber(row[enabledUsersCol] || 0);
-                const activePercent = parseNumber(row[activeUsersPercentCol] || 0);
-                const actionsPerUser = parseNumber(row[avgActionsCol] || 0);
-                const powerUsersPercent = parseNumber(row[powerUsersPercentCol] || 0);
+
+                // For each org, find the most recent date where it actually has Enabled Users data.
+                // Many orgs don't report in every week — using a fixed last-column would miss them.
+                let bestDate = null;
+                for (let i = sortedDates.length - 1; i >= 0; i--) {
+                    const cols = dateMetricMap[sortedDates[i]];
+                    const val = parseNumber(row[cols['Enabled Users']] || 0);
+                    if (val > 0) {
+                        bestDate = sortedDates[i];
+                        break;
+                    }
+                }
+
+                if (!bestDate) {
+                    // No data for this org at all — return zeroes (will be filtered out below)
+                    return { team: orgName, enabledUsers: 0, activeUsers: 0, weeklyActions: 0, monthlyActions: 0, engagement: 0, actionsPerUser: 0, powerUsers: 0 };
+                }
+
+                const bestCols = dateMetricMap[bestDate];
+                const enabledUsers = parseNumber(row[bestCols['Enabled Users']] || 0);
+                const activePercent = parseNumber(row[bestCols['% Active Users']] || 0);
+                const actionsPerUser = parseNumber(row[bestCols['Avg Copilot Actions']] || 0);
+                const powerUsersPercent = parseNumber(row[bestCols['% Power Users']] || 0);
 
                 const activeUsers = Math.round((enabledUsers * activePercent) / 100);
                 const weeklyActions = actionsPerUser * activeUsers;

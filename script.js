@@ -702,6 +702,7 @@ function renderResults() {
         </div>
     `;
 
+    document.getElementById('loadingState').style.display = 'none';
     document.querySelector('.container').innerHTML = html;
 
     // Initialize table sorting after rendering

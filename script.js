@@ -198,6 +198,88 @@ function parseDate(dateString) {
 
 // Flatten data structure for analysis
 function flattenData(rows) {
+    const headers = Object.keys(rows[0]);
+
+    // Detect WIDE format: columns like "2025-08-10 Enabled Users"
+    const dateColumnPattern = /^(\d{4}-\d{2}-\d{2})\s+(.+)$/;
+    const dateMetricMap = {}; // { 'YYYY-MM-DD': { 'Enabled Users': colName, ... } }
+
+    headers.forEach(h => {
+        const match = h.match(dateColumnPattern);
+        if (match) {
+            const date = match[1];
+            const metric = match[2];
+            if (!dateMetricMap[date]) dateMetricMap[date] = {};
+            dateMetricMap[date][metric] = h;
+        }
+    });
+
+    const sortedDates = Object.keys(dateMetricMap).sort();
+    const isWideFormat = sortedDates.length > 0;
+
+    if (isWideFormat) {
+        console.log(`Detected WIDE format CSV with ${sortedDates.length} date columns`);
+
+        // Find the org/team column — first column that isn't date-prefixed
+        const orgColumn = headers.find(h => !dateColumnPattern.test(h)) || headers[0];
+
+        // Use the LAST (most recent) date's columns for current state
+        const latestDate = sortedDates[sortedDates.length - 1];
+        const latestCols = dateMetricMap[latestDate];
+        console.log(`Using most recent date: ${latestDate}`);
+
+        const enabledUsersCol = latestCols['Enabled Users'];
+        const activeUsersPercentCol = latestCols['% Active Users'];
+        const avgActionsCol = latestCols['Avg Copilot Actions'];
+        const powerUsersPercentCol = latestCols['% Power Users'];
+
+        const orgWeeklyData = {};
+
+        const flattenedData = rows
+            .filter(row => {
+                const orgName = (row[orgColumn] || '').trim();
+                // Exclude empty rows and the pre-aggregated "Total" row
+                return orgName && orgName.toLowerCase() !== 'total';
+            })
+            .map(row => {
+                const orgName = (row[orgColumn] || '').trim();
+                const enabledUsers = parseNumber(row[enabledUsersCol] || 0);
+                const activePercent = parseNumber(row[activeUsersPercentCol] || 0);
+                const actionsPerUser = parseNumber(row[avgActionsCol] || 0);
+                const powerUsersPercent = parseNumber(row[powerUsersPercentCol] || 0);
+
+                const activeUsers = Math.round((enabledUsers * activePercent) / 100);
+                const weeklyActions = actionsPerUser * activeUsers;
+                const monthlyActions = weeklyActions * 4.33;
+                const powerUsersCount = Math.round((activeUsers * powerUsersPercent) / 100);
+
+                // Build weekly history for this org (for peak week calculation)
+                orgWeeklyData[orgName] = sortedDates
+                    .map(date => {
+                        const cols = dateMetricMap[date];
+                        const actions = parseNumber(row[cols['Avg Copilot Actions']] || 0);
+                        return { date: parseDate(date), actionsPerUser: actions };
+                    })
+                    .filter(w => w.date !== null && w.actionsPerUser > 0);
+
+                return {
+                    team: orgName,
+                    enabledUsers,
+                    activeUsers,
+                    weeklyActions,
+                    monthlyActions,
+                    engagement: 0,
+                    actionsPerUser,
+                    powerUsers: powerUsersCount
+                };
+            })
+            .filter(row => row.enabledUsers > 0 || row.activeUsers > 0);
+
+        console.log(`Parsed ${flattenedData.length} organizations from wide format`);
+        return { rows: flattenedData, mapping: {}, weeklyData: orgWeeklyData };
+    }
+
+    // --- LONG FORMAT fallback ---
     // Try to detect column names (flexible mapping)
     const columnMappings = {
         team: ['Team', 'Division', 'Department', 'Organization', 'Org', 'Team Name', 'Division Name', 'Organization (Aggregated)'],
@@ -212,9 +294,7 @@ function flattenData(rows) {
     };
 
     // Find matching columns
-    const headers = Object.keys(rows[0]);
     const mapping = {};
-
     for (const [key, possibleNames] of Object.entries(columnMappings)) {
         for (const name of possibleNames) {
             const found = headers.find(h => h.toLowerCase().includes(name.toLowerCase()));
@@ -225,113 +305,94 @@ function flattenData(rows) {
         }
     }
 
-    // Validate required columns
     if (!mapping.team) {
         throw new Error('Could not find team/division column in CSV');
     }
 
-    // Detect if CSV is in long format (has Date column and multiple rows per organization)
     const hasDateColumn = !!mapping.date;
-
-    // Store all weekly data for peak week calculation
     const orgWeeklyData = {};
 
     if (hasDateColumn) {
-        // Group rows by organization
+        console.log('Detected LONG format CSV - aggregating by organization...');
+
         const orgGroups = {};
         rows.forEach(row => {
             const orgName = row[mapping.team];
             if (!orgName) return;
-
-            if (!orgGroups[orgName]) {
-                orgGroups[orgName] = [];
-            }
+            if (!orgGroups[orgName]) orgGroups[orgName] = [];
             orgGroups[orgName].push(row);
         });
 
-        // For each organization, store all weekly data and use the most recent date's data
         const aggregatedRows = [];
         for (const [orgName, orgRows] of Object.entries(orgGroups)) {
-            // Parse dates and sort by most recent
             const rowsWithDates = orgRows.map(row => ({
                 row: row,
                 date: parseDate(row[mapping.date])
             })).filter(item => item.date !== null);
 
             if (rowsWithDates.length === 0) {
-                // No valid dates, use first row
                 aggregatedRows.push(orgRows[0]);
                 continue;
             }
 
-            // Sort by date descending (most recent first)
             rowsWithDates.sort((a, b) => b.date - a.date);
 
-            // Store all weekly data for this org (for peak week calculation)
             orgWeeklyData[orgName] = rowsWithDates.map(item => ({
                 date: item.date,
                 actionsPerUser: parseNumber(item.row[mapping.totalActions] || 0)
             }));
 
-            // Use the most recent row
             aggregatedRows.push(rowsWithDates[0].row);
         }
 
+        console.log(`Aggregated ${rows.length} rows into ${aggregatedRows.length} organizations`);
         rows = aggregatedRows;
     }
 
-    // Flatten rows into normalized structure
-    const flattenedData = rows.map(row => {
-        let enabledUsers = parseNumber(row[mapping.enabledUsers] || 0);
-        let activeUsers = parseNumber(row[mapping.activeUsers] || 0);
+    const flattenedData = rows
+        .filter(row => {
+            const orgName = (row[mapping.team] || '').trim();
+            return orgName && orgName.toLowerCase() !== 'total';
+        })
+        .map(row => {
+            let enabledUsers = parseNumber(row[mapping.enabledUsers] || 0);
+            let activeUsers = parseNumber(row[mapping.activeUsers] || 0);
 
-        // Handle "% Active Users" format - calculate active users from percentage
-        if (mapping.activeUsersPercent && row[mapping.activeUsersPercent] && enabledUsers > 0) {
-            const activePercent = parseNumber(row[mapping.activeUsersPercent]);
-            if (activePercent > 0) {
-                // If percentage is given, calculate active users
-                activeUsers = Math.round((enabledUsers * activePercent) / 100);
+            if (mapping.activeUsersPercent && row[mapping.activeUsersPercent] && enabledUsers > 0) {
+                const activePercent = parseNumber(row[mapping.activeUsersPercent]);
+                if (activePercent > 0) {
+                    activeUsers = Math.round((enabledUsers * activePercent) / 100);
+                }
             }
-        }
 
-        // Fallback: if no active users but have enabled, assume all enabled are active
-        if (activeUsers === 0 && enabledUsers > 0) {
-            activeUsers = enabledUsers;
-        }
+            if (activeUsers === 0 && enabledUsers > 0) {
+                activeUsers = enabledUsers;
+            }
 
-        // Get actions per user per week (from "Avg Copilot Actions" column)
-        let actionsPerUserPerWeek = parseNumber(row[mapping.totalActions] || 0);
+            const actionsPerUserPerWeek = parseNumber(row[mapping.totalActions] || 0);
+            const weeklyActions = actionsPerUserPerWeek * activeUsers;
+            const monthlyActions = weeklyActions * 4.33;
 
-        // Calculate total weekly actions for this team
-        const weeklyActions = actionsPerUserPerWeek * activeUsers;
+            let powerUsersCount = 0;
+            if (mapping.powerUsers && row[mapping.powerUsers]) {
+                const powerUsersPercent = parseNumber(row[mapping.powerUsers]);
+                powerUsersCount = Math.round((activeUsers * powerUsersPercent) / 100);
+            }
 
-        // Calculate monthly actions
-        const monthlyActions = weeklyActions * 4.33;
+            return {
+                team: row[mapping.team],
+                enabledUsers,
+                activeUsers,
+                weeklyActions,
+                monthlyActions,
+                engagement: parseNumber(row[mapping.engagement] || 0),
+                actionsPerUser: actionsPerUserPerWeek,
+                powerUsers: powerUsersCount
+            };
+        })
+        .filter(row => row.enabledUsers > 0 || row.activeUsers > 0);
 
-        // Calculate power users count (% Power Users × Active Users)
-        let powerUsersCount = 0;
-        if (mapping.powerUsers && row[mapping.powerUsers]) {
-            const powerUsersPercent = parseNumber(row[mapping.powerUsers]);
-            powerUsersCount = Math.round((activeUsers * powerUsersPercent) / 100);
-        }
-
-        return {
-            team: row[mapping.team],
-            enabledUsers: enabledUsers,
-            activeUsers: activeUsers,
-            weeklyActions: weeklyActions,
-            monthlyActions: monthlyActions,
-            engagement: parseNumber(row[mapping.engagement] || 0),
-            actionsPerUser: actionsPerUserPerWeek,
-            powerUsers: powerUsersCount
-        };
-    }).filter(row => row.enabledUsers > 0 || row.activeUsers > 0);
-
-    return {
-        rows: flattenedData,
-        mapping: mapping,
-        weeklyData: orgWeeklyData
-    };
+    return { rows: flattenedData, mapping, weeklyData: orgWeeklyData };
 }
 
 // Parse number from string (handles percentages, commas, etc.)
@@ -361,10 +422,9 @@ function calculateMetrics(data) {
     // Average actions per user
     const avgActionsPerUser = totalActiveUsers > 0 ? totalWeeklyActions / totalActiveUsers : 0;
 
-    // Power users (>20 actions/week threshold)
-    const powerUserThreshold = 20;
-    const powerUsers = rows.filter(row => row.actionsPerUser >= powerUserThreshold).length;
-    const powerUserRate = rows.length > 0 ? (powerUsers / rows.length) * 100 : 0;
+    // Power users — sum actual power user counts from each team
+    const powerUsers = rows.reduce((sum, row) => sum + row.powerUsers, 0);
+    const powerUserRate = totalEnabledUsers > 0 ? (powerUsers / totalEnabledUsers) * 100 : 0;
 
     // Monthly costs
     const monthlyCost = totalEnabledUsers * config.licenseCost;

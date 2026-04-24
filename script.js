@@ -220,8 +220,9 @@ function flattenData(rows) {
     if (isWideFormat) {
         console.log(`Detected WIDE format CSV with ${sortedDates.length} date columns`);
 
-        // Find the org/team column — first column that isn't date-prefixed
-        const orgColumn = headers.find(h => !dateColumnPattern.test(h)) || headers[0];
+        // First column is always the grouping key
+        const orgColumn = headers[0];
+        const groupLabel = orgColumn;
 
         const orgWeeklyData = {};
 
@@ -285,13 +286,15 @@ function flattenData(rows) {
             .filter(row => row.enabledUsers > 0 || row.activeUsers > 0);
 
         console.log(`Parsed ${flattenedData.length} organizations from wide format`);
-        return { rows: flattenedData, mapping: {}, weeklyData: orgWeeklyData };
+        return { rows: flattenedData, mapping: {}, weeklyData: orgWeeklyData, groupLabel };
     }
 
     // --- LONG FORMAT fallback ---
+    // First column is always the grouping key
+    const groupLabel = headers[0];
+
     // Try to detect column names (flexible mapping)
     const columnMappings = {
-        team: ['Team', 'Division', 'Department', 'Organization', 'Org', 'Team Name', 'Division Name', 'Organization (Aggregated)', 'Division (Aggregated)', 'JobDiscipline (Aggregated)', 'FunctionType', 'Function Type', 'Function', 'Display Name', 'Group', 'Group Name', 'Business Unit', 'Cost Center', 'Company', 'Office', 'Country', 'City', 'User Principal Name', 'UPN', 'Name'],
         enabledUsers: ['Enabled Users', 'Licensed Users', 'Total Users', 'Enabled'],
         activeUsers: ['Active Users', 'Active', 'Users'],
         totalActions: ['Total Actions', 'Actions', 'Total Activity', 'Avg Copilot Actions'],
@@ -303,7 +306,7 @@ function flattenData(rows) {
     };
 
     // Find matching columns
-    const mapping = {};
+    const mapping = { team: headers[0] };
     for (const [key, possibleNames] of Object.entries(columnMappings)) {
         for (const name of possibleNames) {
             const found = headers.find(h => h.toLowerCase().includes(name.toLowerCase()));
@@ -311,20 +314,6 @@ function flattenData(rows) {
                 mapping[key] = found;
                 break;
             }
-        }
-    }
-
-    if (!mapping.team) {
-        // Last resort: use the first non-numeric, non-date column as the team column
-        const firstTextCol = headers.find(h => {
-            const sample = rows[0][h];
-            return sample && isNaN(parseFloat(sample)) && !parseDate(sample);
-        });
-        if (firstTextCol) {
-            mapping.team = firstTextCol;
-            console.log(`Auto-detected "${firstTextCol}" as the organization column`);
-        } else {
-            throw new Error(`Could not find team/division column in CSV. Columns found: ${headers.slice(0, 8).join(', ')}${headers.length > 8 ? '...' : ''}`);
         }
     }
 
@@ -411,7 +400,7 @@ function flattenData(rows) {
         })
         .filter(row => row.enabledUsers > 0 || row.activeUsers > 0);
 
-    return { rows: flattenedData, mapping, weeklyData: orgWeeklyData };
+    return { rows: flattenedData, mapping, weeklyData: orgWeeklyData, groupLabel };
 }
 
 // Parse number from string (handles percentages, commas, etc.)
@@ -532,7 +521,7 @@ function renderResults() {
         <div class="results-container">
             <header>
                 <h1>M365 Copilot Productivity ROI Analysis Results</h1>
-                <p class="subtitle">Based on ${rows.length} teams/divisions • ${config.analysisWeeks} weeks of data</p>
+                <p class="subtitle">Based on ${rows.length} ${uploadedData.groupLabel || 'teams'} • ${config.analysisWeeks} weeks of data</p>
             </header>
 
             ${showRecap ? `
@@ -626,7 +615,7 @@ function renderResults() {
             </div>
 
             <div class="leaderboard-container">
-                <h2>Top 10 Teams by Value Generated</h2>
+                <h2>Top 10 by Value Generated</h2>
                 ${sortedTeams.slice(0, 10).map((team, index) => `
                     <div class="leaderboard-item">
                         <div class="leaderboard-rank">${index + 1}</div>
@@ -640,12 +629,12 @@ function renderResults() {
             </div>
 
             <div class="leaderboard-container">
-                <h2>All Teams Performance</h2>
+                <h2>All ${uploadedData.groupLabel || 'Teams'} Performance</h2>
                 <table id="teamsTable" class="sortable-table">
                     <thead>
                         <tr>
                             <th class="sortable" data-column="team" data-type="string">
-                                Team/Division <span class="sort-icon"></span>
+                                ${uploadedData.groupLabel || 'Team/Division'} <span class="sort-icon"></span>
                             </th>
                             <th class="sortable" data-column="activeUsers" data-type="number">
                                 Active Users <span class="sort-icon"></span>

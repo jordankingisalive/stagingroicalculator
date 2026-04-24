@@ -72,10 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (uploadedData) renderResults();
     });
 
-    document.getElementById('analysisWeeks').addEventListener('change', (e) => {
-        config.analysisWeeks = parseInt(e.target.value);
-        if (uploadedData) renderResults();
-    });
+
 
     document.getElementById('intelligentRecapActions').addEventListener('change', (e) => {
         config.intelligentRecapActions = parseInt(e.target.value) || 0;
@@ -97,6 +94,7 @@ function handleFile(file) {
         try {
             const csvData = e.target.result;
             uploadedData = parseCSV(csvData);
+            config.analysisWeeks = uploadedData.detectedWeeks || 26;
             renderResults();
         } catch (error) {
             showError('Error processing file: ' + error.message);
@@ -285,8 +283,9 @@ function flattenData(rows) {
             })
             .filter(row => row.enabledUsers > 0 || row.activeUsers > 0);
 
-        console.log(`Parsed ${flattenedData.length} organizations from wide format`);
-        return { rows: flattenedData, mapping: {}, weeklyData: orgWeeklyData, groupLabel };
+        const detectedWeeks = sortedDates.length;
+        console.log(`Parsed ${flattenedData.length} organizations from wide format (${detectedWeeks} weeks)`);
+        return { rows: flattenedData, mapping: {}, weeklyData: orgWeeklyData, groupLabel, detectedWeeks };
     }
 
     // --- LONG FORMAT fallback ---
@@ -400,7 +399,15 @@ function flattenData(rows) {
         })
         .filter(row => row.enabledUsers > 0 || row.activeUsers > 0);
 
-    return { rows: flattenedData, mapping, weeklyData: orgWeeklyData, groupLabel };
+    // Count distinct weeks across all orgs
+    const allDates = new Set();
+    for (const weeks of Object.values(orgWeeklyData)) {
+        weeks.forEach(w => allDates.add(w.date.toISOString().slice(0, 10)));
+    }
+    const detectedWeeks = allDates.size || 1;
+    console.log(`Detected ${detectedWeeks} weeks of data`);
+
+    return { rows: flattenedData, mapping, weeklyData: orgWeeklyData, groupLabel, detectedWeeks };
 }
 
 // Parse number from string (handles percentages, commas, etc.)

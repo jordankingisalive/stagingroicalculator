@@ -7,32 +7,13 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Microsoft Top Bar -->
-    <div class="ms-topbar">
-        <div class="ms-topbar-inner">
-            <div class="ms-topbar-brand">
-                <svg class="ms-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="21" height="21">
-                    <rect x="0" y="0" width="10" height="10" fill="#f25022"/>
-                    <rect x="11" y="0" width="10" height="10" fill="#7fba00"/>
-                    <rect x="0" y="11" width="10" height="10" fill="#00a4ef"/>
-                    <rect x="11" y="11" width="10" height="10" fill="#ffb900"/>
-                </svg>
-                <span class="ms-topbar-brand-name">Microsoft</span>
-            </div>
-            <span class="ms-topbar-divider">|</span>
-            <span class="ms-topbar-product">M365 Copilot ROI Calculator</span>
-        </div>
-    </div>
-
-    <!-- Page Header -->
-    <div class="ms-page-header">
-        <div class="container">
-            <header>
-                <div class="header-content">
-                    <div>
-                        <h1>M365 Copilot Productivity ROI Projections</h1>
-                        <p class="subtitle">Transform your usage data into actionable insights</p>
-                    </div>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>M365 Copilot Productivity ROI Projections</h1>
+                    <p class="subtitle">Transform your usage data into actionable insights</p>
+                </div>
                 <div class="header-actions">
                     <button onclick="exportToPDF()" class="action-btn" title="Export to PDF">
                         <span class="action-icon">📄</span>
@@ -43,9 +24,10 @@
                         <span class="action-text">Email</span>
                     </button>
                 </div>
-                </div>
-            </header>
-            <nav class="nav-buttons">
+            </div>
+        </header>
+
+        <nav class="nav-buttons">
             <a href="index.html" class="nav-btn nav-btn-active">
                 <span class="nav-icon">📊</span>
                 <span class="nav-text">Full Data Analysis</span>
@@ -58,11 +40,8 @@
                 <span class="nav-icon">🚀</span>
                 <span class="nav-text">Adoption Journey</span>
             </a>
-            </nav>
-        </div>
-    </div>
+        </nav>
 
-    <div class="container">
         <main>
             <section class="instructions-section">
                 <h2>Getting Started</h2>
@@ -126,12 +105,6 @@
                                     <small style="margin: 0;">15 min</small>
                                 </div>
                                 <small>Average time saved per Copilot action</small>
-                            </div>
-
-                            <div class="config-item">
-                                <label for="analysisWeeks">Analysis Period (Weeks)</label>
-                                <input type="number" id="analysisWeeks" value="26" min="1" max="52" step="1">
-                                <small>Number of weeks of data to analyze</small>
                             </div>
 
                             <div class="config-item">

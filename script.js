@@ -291,7 +291,7 @@ function flattenData(rows) {
     // --- LONG FORMAT fallback ---
     // Try to detect column names (flexible mapping)
     const columnMappings = {
-        team: ['Team', 'Division', 'Department', 'Organization', 'Org', 'Team Name', 'Division Name', 'Organization (Aggregated)', 'Division (Aggregated)', 'JobDiscipline (Aggregated)', 'Display Name', 'Group', 'Group Name', 'Business Unit', 'Cost Center', 'Company', 'Office', 'Country', 'City', 'User Principal Name', 'UPN', 'Name'],
+        team: ['Team', 'Division', 'Department', 'Organization', 'Org', 'Team Name', 'Division Name', 'Organization (Aggregated)', 'Division (Aggregated)', 'JobDiscipline (Aggregated)', 'FunctionType', 'Function Type', 'Function', 'Display Name', 'Group', 'Group Name', 'Business Unit', 'Cost Center', 'Company', 'Office', 'Country', 'City', 'User Principal Name', 'UPN', 'Name'],
         enabledUsers: ['Enabled Users', 'Licensed Users', 'Total Users', 'Enabled'],
         activeUsers: ['Active Users', 'Active', 'Users'],
         totalActions: ['Total Actions', 'Actions', 'Total Activity', 'Avg Copilot Actions'],

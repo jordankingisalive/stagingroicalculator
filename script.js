@@ -291,7 +291,7 @@ function flattenData(rows) {
     // --- LONG FORMAT fallback ---
     // Try to detect column names (flexible mapping)
     const columnMappings = {
-        team: ['Team', 'Division', 'Department', 'Organization', 'Org', 'Team Name', 'Division Name', 'Organization (Aggregated)'],
+        team: ['Team', 'Division', 'Department', 'Organization', 'Org', 'Team Name', 'Division Name', 'Organization (Aggregated)', 'Division (Aggregated)', 'JobDiscipline (Aggregated)', 'Display Name', 'Group', 'Group Name', 'Business Unit', 'Cost Center', 'Company', 'Office', 'Country', 'City', 'User Principal Name', 'UPN', 'Name'],
         enabledUsers: ['Enabled Users', 'Licensed Users', 'Total Users', 'Enabled'],
         activeUsers: ['Active Users', 'Active', 'Users'],
         totalActions: ['Total Actions', 'Actions', 'Total Activity', 'Avg Copilot Actions'],
@@ -315,7 +315,17 @@ function flattenData(rows) {
     }
 
     if (!mapping.team) {
-        throw new Error('Could not find team/division column in CSV');
+        // Last resort: use the first non-numeric, non-date column as the team column
+        const firstTextCol = headers.find(h => {
+            const sample = rows[0][h];
+            return sample && isNaN(parseFloat(sample)) && !parseDate(sample);
+        });
+        if (firstTextCol) {
+            mapping.team = firstTextCol;
+            console.log(`Auto-detected "${firstTextCol}" as the organization column`);
+        } else {
+            throw new Error(`Could not find team/division column in CSV. Columns found: ${headers.slice(0, 8).join(', ')}${headers.length > 8 ? '...' : ''}`);
+        }
     }
 
     const hasDateColumn = !!mapping.date;

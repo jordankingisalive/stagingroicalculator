@@ -51,6 +51,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Prevent Enter key on config inputs from triggering form submission / Calculate button
+    document.querySelectorAll('.config-grid input[type="number"]').forEach(input => {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') e.preventDefault();
+        });
+    });
+
     // Config inputs
     document.getElementById('licensesCost').addEventListener('change', (e) => {
         config.licenseCost = parseFloat(e.target.value);
@@ -144,12 +151,12 @@ function showFilePreview(fileName, data) {
             </div>
 
             <div style="display: flex; gap: 1rem; align-items: center;">
-                <button onclick="runCalculation()" style="flex: 1; padding: 1rem; font-size: 1.1rem; font-weight: 700; background: linear-gradient(135deg, #4A9EF7, #A855F7); color: #fff; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s ease; font-family: inherit;"
+                <button type="button" onclick="runCalculation()" style="flex: 1; padding: 1rem; font-size: 1.1rem; font-weight: 700; background: linear-gradient(135deg, #4A9EF7, #A855F7); color: #fff; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s ease; font-family: inherit;"
                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 24px rgba(74,158,247,0.3)';"
                     onmouseout="this.style.transform=''; this.style.boxShadow='';">
                     Calculate Productivity ROI
                 </button>
-                <button onclick="location.reload()" style="padding: 1rem 1.5rem; font-size: 0.9rem; font-weight: 600; background: transparent; color: var(--text-secondary, #94A3B8); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 10px; cursor: pointer; font-family: inherit;">
+                <button type="button" onclick="location.reload()" style="padding: 1rem 1.5rem; font-size: 0.9rem; font-weight: 600; background: transparent; color: var(--text-secondary, #94A3B8); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 10px; cursor: pointer; font-family: inherit;">
                     Reset
                 </button>
             </div>

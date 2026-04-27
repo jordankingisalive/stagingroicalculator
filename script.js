@@ -689,8 +689,8 @@ function buildProjectionTables(metrics, sortedTeams) {
     const scaledAnnual = scaledMonthly * 12;
     const annualCost = metrics.annualCost;
 
-    // Expansion scenarios: 2x, 3x, 5x current users
-    const expansionMultiples = [2, 3, 5];
+    // Expansion scenarios: 2x, 5x, 10x, 20x current users
+    const expansionMultiples = [2, 5, 10, 20];
     let projRows = `
         <tr>
             <td><strong>Current deployment</strong></td>

@@ -58,15 +58,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Config inputs
+    // Config inputs — update config values, show recalculate prompt if results are visible
+    function onConfigChange() {
+        if (resultsDisplayed) showRecalculateBanner();
+    }
+
     document.getElementById('licensesCost').addEventListener('change', (e) => {
         config.licenseCost = parseFloat(e.target.value);
-        if (resultsDisplayed) renderResults();
+        onConfigChange();
     });
 
     document.getElementById('professionalRate').addEventListener('change', (e) => {
         config.professionalRate = parseFloat(e.target.value);
-        if (resultsDisplayed) renderResults();
+        onConfigChange();
     });
 
     // Minutes per action slider
@@ -77,14 +81,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const value = parseFloat(e.target.value);
         minutesOutput.textContent = `${value} min`;
         config.minutesPerAction = value;
-        if (resultsDisplayed) renderResults();
+        onConfigChange();
     });
 
 
 
     document.getElementById('intelligentRecapActions').addEventListener('change', (e) => {
         config.intelligentRecapActions = parseInt(e.target.value) || 0;
-        if (resultsDisplayed) renderResults();
+        onConfigChange();
     });
 });
 
@@ -163,6 +167,9 @@ function showFilePreview(fileName, data) {
         </div>
     `;
 
+    // Reset calculation state so config edits don't auto-trigger results
+    resultsDisplayed = false;
+
     // Insert preview after upload area
     const existingPreview = document.getElementById('filePreview');
     if (existingPreview) existingPreview.remove();
@@ -184,10 +191,30 @@ function runCalculation() {
     setTimeout(() => {
         try {
             renderResults();
+            dismissRecalculateBanner();
         } catch (error) {
             showError('Error calculating results: ' + error.message);
         }
     }, 300);
+}
+
+// Show a banner prompting user to recalculate after config changes
+function showRecalculateBanner() {
+    if (document.getElementById('recalcBanner')) return; // already visible
+    const banner = document.createElement('div');
+    banner.id = 'recalcBanner';
+    banner.style.cssText = 'position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#4A9EF7,#A855F7);color:#fff;padding:0.75rem 1.5rem;border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;box-shadow:0 8px 32px rgba(74,158,247,0.35);display:flex;align-items:center;gap:0.75rem;font-family:inherit;animation:fadeIn 0.3s ease;';
+    banner.innerHTML = '⟳ Settings changed &mdash; <span style="text-decoration:underline;cursor:pointer;">Recalculate</span>';
+    banner.addEventListener('click', () => {
+        dismissRecalculateBanner();
+        runCalculation();
+    });
+    document.body.appendChild(banner);
+}
+
+function dismissRecalculateBanner() {
+    const b = document.getElementById('recalcBanner');
+    if (b) b.remove();
 }
 
 // Parse CSV and flatten data structure in RAM

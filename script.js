@@ -1,5 +1,6 @@
 // Global state
 let uploadedData = null;
+let resultsDisplayed = false;
 let config = {
     licenseCost: 32,
     professionalRate: 78,
@@ -53,12 +54,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Config inputs
     document.getElementById('licensesCost').addEventListener('change', (e) => {
         config.licenseCost = parseFloat(e.target.value);
-        if (uploadedData) renderResults();
+        if (resultsDisplayed) renderResults();
     });
 
     document.getElementById('professionalRate').addEventListener('change', (e) => {
         config.professionalRate = parseFloat(e.target.value);
-        if (uploadedData) renderResults();
+        if (resultsDisplayed) renderResults();
     });
 
     // Minutes per action slider
@@ -69,14 +70,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const value = parseFloat(e.target.value);
         minutesOutput.textContent = `${value} min`;
         config.minutesPerAction = value;
-        if (uploadedData) renderResults();
+        if (resultsDisplayed) renderResults();
     });
 
 
 
     document.getElementById('intelligentRecapActions').addEventListener('change', (e) => {
         config.intelligentRecapActions = parseInt(e.target.value) || 0;
-        if (uploadedData) renderResults();
+        if (resultsDisplayed) renderResults();
     });
 });
 
@@ -1016,6 +1017,7 @@ function renderResults() {
 
     document.getElementById('loadingState').style.display = 'none';
     document.querySelector('.container').innerHTML = html;
+    resultsDisplayed = true;
 
     // Initialize table sorting after rendering
     initTableSorting();

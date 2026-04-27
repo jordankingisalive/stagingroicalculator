@@ -598,7 +598,7 @@ function buildProjectionTables(metrics, sortedTeams) {
             <h2>Break-Even & ROI Thresholds</h2>
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
                 Actions per user per month required to reach each ROI target
-                (at ${mpa} min/action, $${valPerAction.toFixed(2)}/action, $${rate}/hr)
+                (at ${mpa} min/action, $${rate}/hr)
             </p>
             <table>
                 <thead>

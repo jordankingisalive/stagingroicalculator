@@ -623,37 +623,40 @@ function buildProjectionTables(metrics, sortedTeams) {
         </div>`;
 
     // ---- USAGE TIER DISTRIBUTION ----
-    // Sort teams by actions per user, split into quintiles
+    // Sort teams by actions per user, split into super user report tiers
     const byActions = [...sortedTeams].sort((a, b) => b.actionsPerUser - a.actionsPerUser);
-    const tierCount = Math.min(5, byActions.length);
-    const tierSize = Math.ceil(byActions.length / tierCount);
-    const tierNames = ['Top 20%', '60-80th %ile', '40-60th %ile', '20-40th %ile', 'Bottom 20%'];
-    const tierColors = ['var(--green)', 'var(--copilot-cyan)', 'var(--copilot-blue)', 'var(--copilot-orange)', 'var(--red)'];
+    const totalTeams = byActions.length;
+    // Tier boundaries: Top 10%, 75-90%, 50-75%, 25-50%, Bottom 25%
+    const tierDefs = [
+        { name: 'Top 10%',    color: 'var(--green)',          start: 0,                                    end: Math.max(1, Math.round(totalTeams * 0.10)) },
+        { name: '75-90%',     color: 'var(--copilot-cyan)',   start: Math.max(1, Math.round(totalTeams * 0.10)), end: Math.round(totalTeams * 0.25) },
+        { name: '50-75%',     color: 'var(--copilot-blue)',   start: Math.round(totalTeams * 0.25),        end: Math.round(totalTeams * 0.50) },
+        { name: '25-50%',     color: 'var(--copilot-orange)', start: Math.round(totalTeams * 0.50),        end: Math.round(totalTeams * 0.75) },
+        { name: 'Bottom 25%', color: 'var(--red)',            start: Math.round(totalTeams * 0.75),        end: totalTeams },
+    ];
 
     let tierRows = '';
-    for (let i = 0; i < tierCount; i++) {
-        const start = i * tierSize;
-        const end = Math.min(start + tierSize, byActions.length);
-        const slice = byActions.slice(start, end);
-        if (slice.length === 0) continue;
+    tierDefs.forEach(tier => {
+        const slice = byActions.slice(tier.start, tier.end);
+        if (slice.length === 0) return;
 
         const tierUsers = slice.reduce((s, t) => s + t.activeUsers, 0);
         const tierWeekly = slice.reduce((s, t) => s + t.weeklyActions, 0);
         const tierAvgWeekly = tierUsers > 0 ? tierWeekly / tierUsers : 0;
         const tierMonthly = tierAvgWeekly * 4.33;
         const tierMonthlyVal = slice.reduce((s, t) => s + t.monthlyValue, 0);
-        const tierInvestment = slice.reduce((s, t) => s + t.activeUsers, 0) * licenseCost;
+        const tierInvestment = tierUsers * licenseCost;
         const tierRoi = tierInvestment > 0 ? (tierMonthlyVal / tierInvestment).toFixed(1) : '0.0';
 
         tierRows += `<tr>
-            <td><span style="color:${tierColors[i]}; font-weight:700;">${tierNames[i]}</span></td>
+            <td><span style="color:${tier.color}; font-weight:700;">${tier.name}</span></td>
             <td>${tierUsers.toLocaleString()}</td>
             <td>${tierMonthly.toFixed(0)}</td>
             <td>$${tierInvestment.toLocaleString()}</td>
             <td>$${tierMonthlyVal.toLocaleString()}</td>
             <td style="color: var(--green); font-weight: bold;">${tierRoi}x</td>
         </tr>`;
-    }
+    });
 
     // Totals row
     const totalTierInvestment = activeUsers * licenseCost;
@@ -720,12 +723,14 @@ function buildProjectionTables(metrics, sortedTeams) {
         });
     });
 
+    const avgMonthlyActions = avgMonthly.toFixed(0);
+
     const projHtml = `
         <div class="roi-table-container">
             <h2>Expansion Projections</h2>
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
                 Projected value if current usage patterns hold as deployment scales.
-                50% scenarios assume new users need ramp time. All values at ${mpa} min/action, $${rate}/hr.
+                All values at ${mpa} min/action, $${rate}/hr.
             </p>
             <table>
                 <thead>
@@ -734,9 +739,14 @@ function buildProjectionTables(metrics, sortedTeams) {
                 <tbody>${projRows}</tbody>
             </table>
             <div class="info-box" style="margin-top:1rem;">
-                <p><strong>Note:</strong> Projections assume new users achieve the same average actions per user as the current deployment.
-                The 50% scenarios provide a conservative ramp-up estimate. Adjust the minutes-per-action and professional rate
-                settings to model different assumptions.</p>
+                <p><strong>What does adoption % mean?</strong><br>
+                Your current users average <strong>~${avgMonthlyActions} actions/month</strong>.
+                <strong>100% adoption</strong> assumes new users reach that same average.
+                <strong>50% adoption</strong> assumes new users ramp to half that level (~${(avgMonthly * 0.5).toFixed(0)} actions/month),
+                reflecting a conservative first-year rollout where users are still building habits.</p>
+                <p style="margin-top:0.75rem;"><strong>Need more detailed projections?</strong>
+                Use the <a href="https://jordankingisalive.github.io/CopilotROICalculator/roi-calculator.html" target="_blank" style="color: var(--copilot-cyan); font-weight: 600;">ROI Calculator</a>
+                to model custom user counts, pricing tiers, and adoption curves for your specific scenario.</p>
             </div>
         </div>`;
 

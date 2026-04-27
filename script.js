@@ -183,9 +183,18 @@ function showFilePreview(fileName, data) {
     uploadArea.parentNode.insertBefore(previewDiv, uploadArea.nextSibling);
 }
 
+// Sync config from current DOM input values
+function syncConfigFromInputs() {
+    config.licenseCost = parseFloat(document.getElementById('licensesCost').value) || 0;
+    config.professionalRate = parseFloat(document.getElementById('professionalRate').value) || 0;
+    config.minutesPerAction = parseFloat(document.getElementById('minutesPerAction').value) || 6;
+    config.intelligentRecapActions = parseInt(document.getElementById('intelligentRecapActions').value) || 0;
+}
+
 // Run calculation (triggered by Calculate button)
 function runCalculation() {
     if (!uploadedData) return;
+    syncConfigFromInputs();
     showLoading();
     // Small delay so loading spinner is visible
     setTimeout(() => {

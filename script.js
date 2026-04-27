@@ -854,6 +854,32 @@ function renderResults() {
                 </div>
             </div>
 
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">WAU (Weekly Active Users)</div>
+                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString()}</div>
+                    <div class="metric-sublabel">${(metrics.totalActiveUsers / metrics.totalEnabledUsers * 100).toFixed(1)}% of licensed</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">MAU (Monthly Active Users)</div>
+                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString()}</div>
+                    <div class="metric-sublabel">Based on ${config.analysisWeeks}-week rolling data</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Weekly Productivity Value</div>
+                    <div class="metric-value">$${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString()} actions × ${config.minutesPerAction} min</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Monthly Productivity Value</div>
+                    <div class="metric-value">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div class="metric-sublabel">${metrics.roiMultiple.toFixed(1)}x return on license cost</div>
+                </div>
+            </div>
+
             <div class="roi-table-container">
                 <h2>Productivity ROI Calculation</h2>
                 <table>

@@ -50,14 +50,35 @@
                     <div class="step-number">1</div>
                     <div class="step-content">
                         <h3>Export Your Heatmap Data</h3>
-                        <p>Open your Copilot-Insight Power BI report (.pbit file) and locate the usage heatmap table. This is generated using the Power BI report at <a href="https://aka.ms/decodingsuperusage" target="_blank" style="color: var(--copilot-blue); font-weight: 600; text-decoration: underline;">https://aka.ms/decodingsuperusage</a>.</p>
-                        <ol>
-                            <li>Ctrl+Left Click ALL options on the left-hand side of the heatmap</li>
-                            <li>Click on the heatmap visualization in Power BI</li>
-                            <li>Select the <strong>More options</strong> (three dots) menu in the top right of the heatmap box</li>
-                            <li>Click <strong>"Export"</strong></li>
-                            <li>Click <strong>"Save"</strong> to save the CSV file (default name: <code>data.csv</code>)</li>
-                            <li>Optional: Rename to <code>heatmap.csv</code> when saving for easier identification</li>
+                        <p>Open the Copilot usage heatmap from the Power BI report at <a href="https://aka.ms/decodingsuperusage" target="_blank" style="color: var(--copilot-blue); font-weight: 600; text-decoration: underline;">https://aka.ms/decodingsuperusage</a>. You can export from either <strong>Power BI Desktop</strong> or <strong>Power BI Web (app.powerbi.com)</strong>.</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;">
+                            <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1.25rem; border: 1px solid var(--border, rgba(255,255,255,0.08));">
+                                <strong style="color: var(--copilot-cyan, #00D4FF); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">💻 Power BI Desktop</strong>
+                                <ol style="margin-top: 0.75rem; padding-left: 1.25rem;">
+                                    <li>Open the .pbit file in Power BI Desktop</li>
+                                    <li>Ctrl+Click ALL options on the left-hand side of the heatmap</li>
+                                    <li>Click on the heatmap visualization</li>
+                                    <li>Click the <strong>More options</strong> (⋯) menu at the top right of the visual</li>
+                                    <li>Click <strong>"Export data"</strong></li>
+                                    <li>Save the CSV file</li>
+                                </ol>
+                            </div>
+                            <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1.25rem; border: 1px solid var(--border, rgba(255,255,255,0.08));">
+                                <strong style="color: var(--copilot-cyan, #00D4FF); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">🌐 Power BI Web (Service)</strong>
+                                <ol style="margin-top: 0.75rem; padding-left: 1.25rem;">
+                                    <li>Open the report on app.powerbi.com</li>
+                                    <li>Ctrl+Click ALL options on the left-hand side of the heatmap</li>
+                                    <li>Hover over the heatmap visualization</li>
+                                    <li>Click the <strong>More options</strong> (⋯) menu at the top right of the visual</li>
+                                    <li>Click <strong>"Export data"</strong></li>
+                                    <li>Choose <strong>"Summarized data"</strong> and click <strong>Export</strong></li>
+                                </ol>
+                            </div>
+                        </div>
+
+                        <ol start="7" style="margin-top: 0.5rem;">
+                            <li>Optional: Rename to <code>heatmap.csv</code> for easier identification</li>
                         </ol>
                         <div class="info-box">
                             <strong>Expected columns:</strong> Team/Division Name, Active Users, Enabled Users, Total Actions, Monthly Actions, Engagement %, etc.

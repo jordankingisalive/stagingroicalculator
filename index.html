@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>M365 Copilot Productivity ROI Calculator</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        details[open] > summary span:first-child { transform: rotate(90deg); }
+        details summary::-webkit-details-marker { display: none; }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -50,12 +54,14 @@
                     <div class="step-number">1</div>
                     <div class="step-content">
                         <h3>Export Your Heatmap Data</h3>
-                        <p>Open the Copilot usage heatmap from the Power BI report at <a href="https://aka.ms/decodingsuperusage" target="_blank" style="color: var(--copilot-blue); font-weight: 600; text-decoration: underline;">https://aka.ms/decodingsuperusage</a>. You can export from either <strong>Power BI Desktop</strong> or <strong>Power BI Web (app.powerbi.com)</strong>.</p>
+                        <p>Export data from the <strong>Copilot Super Usage Report</strong> heatmap. Get the report at <a href="https://aka.ms/decodingsuperusage" target="_blank" style="color: var(--copilot-blue); font-weight: 600; text-decoration: underline;">https://aka.ms/decodingsuperusage</a>. Choose your export method below:</p>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;">
-                            <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1.25rem; border: 1px solid var(--border, rgba(255,255,255,0.08));">
-                                <strong style="color: var(--copilot-cyan, #00D4FF); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">💻 Power BI Desktop</strong>
-                                <ol style="margin-top: 0.75rem; padding-left: 1.25rem;">
+                        <details style="background: var(--surface-raised, #253449); border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,0.08)); margin: 0.75rem 0; overflow: hidden;">
+                            <summary style="padding: 1rem 1.25rem; cursor: pointer; font-weight: 700; color: var(--copilot-cyan, #00D4FF); display: flex; align-items: center; gap: 0.5rem; list-style: none;">
+                                <span style="transition: transform 0.2s; display: inline-block;">▶</span> 💻 Export from Power BI Desktop
+                            </summary>
+                            <div style="padding: 0 1.25rem 1.25rem;">
+                                <ol style="padding-left: 1.25rem; margin: 0;">
                                     <li>Open the .pbit file in Power BI Desktop</li>
                                     <li>Ctrl+Click ALL options on the left-hand side of the heatmap</li>
                                     <li>Click on the heatmap visualization</li>
@@ -64,9 +70,14 @@
                                     <li>Save the CSV file</li>
                                 </ol>
                             </div>
-                            <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1.25rem; border: 1px solid var(--border, rgba(255,255,255,0.08));">
-                                <strong style="color: var(--copilot-cyan, #00D4FF); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">🌐 Power BI Web (Service)</strong>
-                                <ol style="margin-top: 0.75rem; padding-left: 1.25rem;">
+                        </details>
+
+                        <details style="background: var(--surface-raised, #253449); border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,0.08)); margin: 0.75rem 0; overflow: hidden;">
+                            <summary style="padding: 1rem 1.25rem; cursor: pointer; font-weight: 700; color: var(--copilot-cyan, #00D4FF); display: flex; align-items: center; gap: 0.5rem; list-style: none;">
+                                <span style="transition: transform 0.2s; display: inline-block;">▶</span> 🌐 Export from Power BI Web (app.powerbi.com)
+                            </summary>
+                            <div style="padding: 0 1.25rem 1.25rem;">
+                                <ol style="padding-left: 1.25rem; margin: 0;">
                                     <li>Open the report on app.powerbi.com</li>
                                     <li>Ctrl+Click ALL options on the left-hand side of the heatmap</li>
                                     <li>Hover over the heatmap visualization</li>
@@ -75,11 +86,9 @@
                                     <li>Choose <strong>"Summarized data"</strong> and click <strong>Export</strong></li>
                                 </ol>
                             </div>
-                        </div>
+                        </details>
 
-                        <ol start="7" style="margin-top: 0.5rem;">
-                            <li>Optional: Rename to <code>heatmap.csv</code> for easier identification</li>
-                        </ol>
+                        <p style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary, #94A3B8);">Optional: Rename the downloaded file to <code>heatmap.csv</code> for easier identification.</p>
                         <div class="info-box">
                             <strong>Expected columns:</strong> Team/Division Name, Active Users, Enabled Users, Total Actions, Monthly Actions, Engagement %, etc.
                         </div>

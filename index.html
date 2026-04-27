@@ -77,13 +77,18 @@
                                 <span style="transition: transform 0.2s; display: inline-block;">▶</span> 🌐 Export from Power BI Web (app.powerbi.com)
                             </summary>
                             <div style="padding: 0 1.25rem 1.25rem;">
+                                <div style="background: rgba(234,179,8,0.1); border: 1px solid rgba(234,179,8,0.3); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.9rem; color: #FCD34D;">
+                                    <strong>⚠️ Note:</strong> Exporting visual data from the Power BI web app requires your tenant admin to have enabled the "Export data" setting. If the option below is not available, use <strong>Power BI Desktop</strong> instead.
+                                </div>
                                 <ol style="padding-left: 1.25rem; margin: 0;">
                                     <li>Open the report on app.powerbi.com</li>
                                     <li>Ctrl+Click ALL metric options on the left-hand side of the heatmap (Enabled Users, % Active Users, etc.)</li>
                                     <li>Click on the heatmap table to select it</li>
-                                    <li>Click <strong>"Export"</strong> in the top menu bar (between File and Share)</li>
-                                    <li>Select <strong>"Export to .csv"</strong> with the current data</li>
+                                    <li>Hover over the visual — look for a small <strong>⋯</strong> icon in the top-right corner of the visual's header bar</li>
+                                    <li>If the icon appears, click it and select <strong>"Export data"</strong>, then choose <strong>"Summarized data"</strong> → <strong>".csv"</strong> → <strong>Export</strong></li>
+                                    <li>If no icon appears, your organization's admin settings may prevent visual-level data export — use Power BI Desktop instead</li>
                                 </ol>
+                                <p style="margin: 0.75rem 0 0; font-size: 0.85rem; color: var(--text-secondary, #94A3B8);"><strong>Tip:</strong> The top menu bar "Export" button only exports the full report as PDF, PowerPoint, or an Excel PivotTable — it does not export the visual's underlying data as a flat CSV.</p>
                             </div>
                         </details>
 

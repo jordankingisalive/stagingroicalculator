@@ -33,10 +33,11 @@
 
         .phase-card {
             flex: 1;
-            background: var(--white);
-            border-radius: 12px;
+            background: var(--surface, #1E293B);
+            border-radius: 14px;
             padding: 2rem;
-            box-shadow: 0 4px 16px var(--shadow);
+            box-shadow: 0 4px 24px var(--shadow);
+            border: 1px solid var(--border, rgba(255,255,255,0.08));
             position: relative;
             z-index: 1;
             border-top: 6px solid var(--copilot-blue);
@@ -64,7 +65,7 @@
             padding: 0.5rem 1.5rem;
             border-radius: 24px;
             font-weight: bold;
-            color: var(--white);
+            color: #0B1120;
             margin-bottom: 0.5rem;
         }
 
@@ -93,7 +94,7 @@
             display: flex;
             justify-content: space-between;
             padding: 0.75rem 0;
-            border-bottom: 1px solid var(--light-gray);
+            border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
         }
 
         .metric-row:last-child {
@@ -111,10 +112,11 @@
         }
 
         .monthly-projection {
-            background: var(--white);
+            background: var(--surface, #1E293B);
             padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 16px var(--shadow);
+            border-radius: 16px;
+            box-shadow: 0 4px 24px var(--shadow);
+            border: 1px solid var(--border, rgba(255,255,255,0.08));
             margin: 2rem 0;
         }
 
@@ -130,11 +132,12 @@
         }
 
         .month-card {
-            background: var(--light-gray);
+            background: var(--surface-raised, #253449);
             padding: 1rem;
-            border-radius: 8px;
+            border-radius: 10px;
             text-align: center;
             transition: transform 0.2s;
+            border: 1px solid var(--border, rgba(255,255,255,0.08));
         }
 
         .month-card:hover {
@@ -168,10 +171,11 @@
         }
 
         .insight-card {
-            background: var(--white);
+            background: var(--surface, #1E293B);
             padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px var(--shadow);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px var(--shadow);
+            border: 1px solid var(--border, rgba(255,255,255,0.08));
             border-left: 4px solid var(--copilot-cyan);
         }
 
@@ -181,11 +185,11 @@
         }
 
         .chart-placeholder {
-            background: var(--light-gray);
+            background: var(--surface-raised, #253449);
             padding: 2rem;
-            border-radius: 8px;
+            border-radius: 10px;
             text-align: center;
-            color: var(--gray);
+            color: var(--text-secondary, #94A3B8);
             margin: 2rem 0;
         }
 
@@ -200,19 +204,19 @@
             justify-content: space-between;
             cursor: pointer;
             padding: 1rem 1.5rem;
-            background: #fff8f0;
+            background: rgba(245, 158, 11, 0.1);
             border-left: 4px solid var(--copilot-orange);
             border-radius: 8px;
             transition: background 0.3s ease;
         }
 
         .important-box-header:hover {
-            background: #fff3e0;
+            background: rgba(245, 158, 11, 0.15);
         }
 
         .important-box-title {
             font-weight: bold;
-            color: var(--dark-blue);
+            color: var(--copilot-orange);
             font-size: 1.1rem;
         }
 
@@ -236,13 +240,14 @@
 
         .important-box-content {
             padding: 1.5rem;
-            background: #fff8f0;
+            background: rgba(245, 158, 11, 0.08);
             border-left: 4px solid var(--copilot-orange);
             border-top: none;
             border-radius: 0 0 8px 8px;
             margin-top: -8px;
             transition: max-height 0.3s ease, opacity 0.3s ease;
             overflow: hidden;
+            color: var(--text-secondary, #94A3B8);
         }
 
         .important-box-content.collapsed {
@@ -258,35 +263,27 @@
     </style>
 </head>
 <body>
-    <!-- Microsoft Top Bar -->
-    <div class="ms-topbar">
-        <div class="ms-topbar-inner">
-            <div class="ms-topbar-brand">
-                <svg class="ms-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="21" height="21">
-                    <rect x="0" y="0" width="10" height="10" fill="#f25022"/>
-                    <rect x="11" y="0" width="10" height="10" fill="#7fba00"/>
-                    <rect x="0" y="11" width="10" height="10" fill="#00a4ef"/>
-                    <rect x="11" y="11" width="10" height="10" fill="#ffb900"/>
-                </svg>
-                <span class="ms-topbar-brand-name">Microsoft</span>
-            </div>
-            <span class="ms-topbar-divider">|</span>
-            <span class="ms-topbar-product">M365 Copilot ROI Calculator</span>
-        </div>
-    </div>
-
-    <!-- Page Header -->
-    <div class="ms-page-header">
-        <div class="container">
-            <header>
-                <div class="header-content">
-                    <div>
-                        <h1>Copilot Adoption Journey</h1>
-                        <p class="subtitle">Realistic timeline of productivity value realization</p>
-                    </div>
+    <div class="container journey-container">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>M365 Copilot Productivity ROI Projections</h1>
+                    <p class="subtitle">Understanding the path to productivity growth and value realization</p>
                 </div>
-            </header>
-            <nav class="nav-buttons">
+                <div class="header-actions">
+                    <button onclick="exportToPDF()" class="action-btn" title="Export to PDF">
+                        <span class="action-icon">📄</span>
+                        <span class="action-text">Export PDF</span>
+                    </button>
+                    <button onclick="emailReport()" class="action-btn" title="Share via Email">
+                        <span class="action-icon">📧</span>
+                        <span class="action-text">Email</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <nav class="nav-buttons">
             <a href="index.html" class="nav-btn">
                 <span class="nav-icon">📊</span>
                 <span class="nav-text">Full Data Analysis</span>
@@ -299,11 +296,8 @@
                 <span class="nav-icon">🚀</span>
                 <span class="nav-text">Adoption Journey</span>
             </a>
-            </nav>
-        </div>
-    </div>
+        </nav>
 
-    <div class="container">
         <main>
             <div class="important-box-wrapper">
                 <div class="important-box-header" onclick="toggleImportantBox()">
@@ -436,8 +430,8 @@
             <section class="monthly-projection">
                 <h3>Month-by-Month Productivity ROI Projection (1,000 Users Example)</h3>
 
-                <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 1.5rem; padding: 1rem; background: var(--light-gray); border-radius: 8px;">
-                    <span style="font-weight: 600; color: var(--dark-blue);">Estimate Type:</span>
+                <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 1.5rem; padding: 1rem; background: var(--surface-raised, #253449); border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,0.08));">
+                    <span style="font-weight: 600; color: var(--text-primary, #F1F5F9);">Estimate Type:</span>
                     <label class="toggle-switch">
                         <input type="checkbox" id="estimateToggle" onchange="updateProjectionEstimate()">
                         <span class="toggle-slider"></span>
@@ -501,6 +495,70 @@
                     </p>
                 </div>
             </section>
+
+            <div class="roi-table-container">
+                <h2>Real Customer Examples</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Organization</th>
+                            <th>Industry</th>
+                            <th>Users</th>
+                            <th>Time to Maturity</th>
+                            <th>Month 6 ROI</th>
+                            <th>Key Success Factor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Pharmaceutical Co.</strong></td>
+                            <td>Healthcare</td>
+                            <td>1,711</td>
+                            <td>26 weeks</td>
+                            <td style="color: var(--green); font-weight: bold;">16x</td>
+                            <td>Executive sponsorship + champions</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Financial Services</strong></td>
+                            <td>Finance</td>
+                            <td>25,000</td>
+                            <td>18 weeks</td>
+                            <td style="color: var(--green); font-weight: bold;">4.8x</td>
+                            <td>Division-specific training</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tech Company</strong></td>
+                            <td>Technology</td>
+                            <td>5,200</td>
+                            <td>32 weeks</td>
+                            <td style="color: var(--green); font-weight: bold;">22x</td>
+                            <td>Developer-led adoption</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Manufacturing</strong></td>
+                            <td>Industrial</td>
+                            <td>3,400</td>
+                            <td>28 weeks</td>
+                            <td style="color: var(--green); font-weight: bold;">14x</td>
+                            <td>Use case library + feedback loops</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="info-box" style="margin-top: 2rem; background: rgba(74, 158, 247, 0.08); border-left-color: var(--copilot-blue);">
+                <strong>💼 For Sales Conversations</strong>
+                <p>
+                    <strong>Use this page to:</strong><br>
+                    • Set realistic expectations about adoption timelines<br>
+                    • Show that ROI doesn't happen instantly but builds predictably<br>
+                    • Demonstrate that 6-9 months is normal and expected<br>
+                    • Position month-1 ROI (3-5x) as the baseline, not the ceiling<br>
+                    • Explain that the journey requires investment in training and change management<br>
+                    • Show examples of real customer progressions<br><br>
+                    <strong>Key message:</strong> "Copilot isn't a one-time productivity boost—it's a transformation journey that delivers increasing returns over 6-9 months."
+                </p>
+            </div>
 
             <div style="text-align: center; margin-top: 2rem; margin-bottom: 2rem;">
                 <a href="roi-calculator.html" class="btn-primary" style="text-decoration: none; margin-right: 1rem;">Calculate Projected ROI →</a>

@@ -87,15 +87,13 @@ function handleFile(file) {
         return;
     }
 
-    showLoading();
-
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
             const csvData = e.target.result;
             uploadedData = parseCSV(csvData);
             config.analysisWeeks = uploadedData.detectedWeeks || 26;
-            renderResults();
+            showFilePreview(file.name, uploadedData);
         } catch (error) {
             showError('Error processing file: ' + error.message);
         }
@@ -104,6 +102,84 @@ function handleFile(file) {
         showError('Error reading file');
     };
     reader.readAsText(file);
+}
+
+// Show file preview with Calculate button
+function showFilePreview(fileName, data) {
+    const rows = data.rows;
+    const totalUsers = rows.reduce((s, r) => s + r.enabledUsers, 0);
+    const totalActive = rows.reduce((s, r) => s + r.activeUsers, 0);
+    const activationRate = totalUsers > 0 ? ((totalActive / totalUsers) * 100).toFixed(1) : '0.0';
+    const totalWeeklyActions = rows.reduce((s, r) => s + r.weeklyActions, 0);
+    const groupLabel = data.groupLabel || 'teams';
+
+    const previewHtml = `
+        <div style="background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin: 1.5rem 0; animation: fadeIn 0.4s ease;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
+                <span style="font-size: 1.5rem;">✅</span>
+                <div>
+                    <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary, #F1F5F9);">${fileName}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary, #94A3B8);">File loaded successfully</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${rows.length}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">${groupLabel}</div>
+                </div>
+                <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalUsers.toLocaleString()}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Licensed Users</div>
+                </div>
+                <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${activationRate}%</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Activation</div>
+                </div>
+                <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalWeeklyActions.toLocaleString()}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Weekly Actions</div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <button onclick="runCalculation()" style="flex: 1; padding: 1rem; font-size: 1.1rem; font-weight: 700; background: linear-gradient(135deg, #4A9EF7, #A855F7); color: #fff; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s ease; font-family: inherit;"
+                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 24px rgba(74,158,247,0.3)';"
+                    onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                    Calculate Productivity ROI
+                </button>
+                <button onclick="location.reload()" style="padding: 1rem 1.5rem; font-size: 0.9rem; font-weight: 600; background: transparent; color: var(--text-secondary, #94A3B8); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 10px; cursor: pointer; font-family: inherit;">
+                    Reset
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Insert preview after upload area
+    const existingPreview = document.getElementById('filePreview');
+    if (existingPreview) existingPreview.remove();
+
+    const previewDiv = document.createElement('div');
+    previewDiv.id = 'filePreview';
+    previewDiv.innerHTML = previewHtml;
+
+    const uploadArea = document.getElementById('uploadArea');
+    uploadArea.style.display = 'none';
+    uploadArea.parentNode.insertBefore(previewDiv, uploadArea.nextSibling);
+}
+
+// Run calculation (triggered by Calculate button)
+function runCalculation() {
+    if (!uploadedData) return;
+    showLoading();
+    // Small delay so loading spinner is visible
+    setTimeout(() => {
+        try {
+            renderResults();
+        } catch (error) {
+            showError('Error calculating results: ' + error.message);
+        }
+    }, 300);
 }
 
 // Parse CSV and flatten data structure in RAM

@@ -475,6 +475,198 @@ function calculateMetrics(data) {
     };
 }
 
+// Build ROI projection tables (break-even, tiers, 3-year projections)
+function buildProjectionTables(metrics, sortedTeams) {
+    const rate = config.professionalRate;
+    const mpa = config.minutesPerAction;
+    const valPerAction = (mpa / 60) * rate;
+    const licenseCost = config.licenseCost;
+    const totalUsers = metrics.totalEnabledUsers;
+    const activeUsers = metrics.totalActiveUsers;
+    const avgWeekly = metrics.avgActionsPerUser;
+    const avgMonthly = avgWeekly * 4.33;
+
+    // Helper: break-even actions needed at a given price
+    const be = (price) => (price / valPerAction).toFixed(1);
+    // Helper: ROI at a given price
+    const roiAt = (price) => (avgMonthly * valPerAction / price).toFixed(1);
+
+    // Price tiers for break-even table
+    const tiers = [
+        { label: `Current @ $${licenseCost}`, price: licenseCost },
+    ];
+    // Add common expansion tiers if different from current
+    [9, 12, 15, 18, 24, 30].forEach(p => {
+        if (p !== licenseCost) tiers.push({ label: `@ $${p}/mo`, price: p });
+    });
+    // Keep it manageable - show current + 4 most relevant
+    const priceTiers = [tiers[0]];
+    const others = tiers.slice(1).sort((a, b) => a.price - b.price);
+    // Pick a spread: lowest, a mid, and highest that differ from current
+    if (others.length > 0) {
+        const spread = [others[0]];
+        if (others.length > 2) spread.push(others[Math.floor(others.length / 2)]);
+        if (others.length > 1) spread.push(others[others.length - 1]);
+        spread.forEach(t => { if (!priceTiers.find(p => p.price === t.price)) priceTiers.push(t); });
+    }
+
+    // ---- BREAK-EVEN TABLE ----
+    const beHeaders = priceTiers.map(t => `<th>${t.label}</th>`).join('');
+    const beRow = (label, multiplier) => {
+        const cells = priceTiers.map(t => `<td>${(t.price * multiplier / valPerAction).toFixed(1)}</td>`).join('');
+        return `<tr><td><strong>${label}</strong></td>${cells}</tr>`;
+    };
+
+    const breakEvenHtml = `
+        <div class="roi-table-container">
+            <h2>Break-Even & ROI Thresholds</h2>
+            <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
+                Actions per user per month required to reach each ROI target
+                (at ${mpa} min/action, $${valPerAction.toFixed(2)}/action, $${rate}/hr)
+            </p>
+            <table>
+                <thead>
+                    <tr><th>ROI Target</th>${beHeaders}</tr>
+                </thead>
+                <tbody>
+                    ${beRow('Break-even (1x)', 1)}
+                    ${beRow('2x Return', 2)}
+                    ${beRow('5x Return', 5)}
+                    ${beRow('10x Return', 10)}
+                    <tr style="border-top: 2px solid var(--copilot-blue);">
+                        <td><strong>Your Actual (avg)</strong></td>
+                        ${priceTiers.map(t => `<td style="color: var(--green); font-weight: bold;">${(avgMonthly * valPerAction / t.price).toFixed(1)}x ROI</td>`).join('')}
+                    </tr>
+                </tbody>
+            </table>
+            <div class="info-box" style="margin-top:1rem;">
+                <p><strong>Your users average ~${avgMonthly.toFixed(0)} actions/month</strong>, which
+                ${avgMonthly > parseFloat(be(licenseCost)) ? 'exceeds' : 'is below'} break-even
+                (${be(licenseCost)} actions) at the current $${licenseCost}/user/month rate.</p>
+            </div>
+        </div>`;
+
+    // ---- USAGE TIER DISTRIBUTION ----
+    // Sort teams by actions per user, split into quintiles
+    const byActions = [...sortedTeams].sort((a, b) => b.actionsPerUser - a.actionsPerUser);
+    const tierCount = Math.min(5, byActions.length);
+    const tierSize = Math.ceil(byActions.length / tierCount);
+    const tierNames = ['Top 20%', '60-80th %ile', '40-60th %ile', '20-40th %ile', 'Bottom 20%'];
+    const tierColors = ['var(--green)', 'var(--copilot-cyan)', 'var(--copilot-blue)', 'var(--copilot-orange)', 'var(--red)'];
+
+    let tierRows = '';
+    for (let i = 0; i < tierCount; i++) {
+        const start = i * tierSize;
+        const end = Math.min(start + tierSize, byActions.length);
+        const slice = byActions.slice(start, end);
+        if (slice.length === 0) continue;
+
+        const tierUsers = slice.reduce((s, t) => s + t.activeUsers, 0);
+        const tierWeekly = slice.reduce((s, t) => s + t.weeklyActions, 0);
+        const tierAvgWeekly = tierUsers > 0 ? tierWeekly / tierUsers : 0;
+        const tierMonthly = tierAvgWeekly * 4.33;
+        const tierMonthlyVal = slice.reduce((s, t) => s + t.monthlyValue, 0);
+        const tierInvestment = slice.reduce((s, t) => s + t.activeUsers, 0) * licenseCost;
+        const tierRoi = tierInvestment > 0 ? (tierMonthlyVal / tierInvestment).toFixed(1) : '0.0';
+
+        tierRows += `<tr>
+            <td><span style="color:${tierColors[i]}; font-weight:700;">${tierNames[i]}</span></td>
+            <td>${tierUsers.toLocaleString()}</td>
+            <td>${tierMonthly.toFixed(0)}</td>
+            <td>$${tierInvestment.toLocaleString()}</td>
+            <td>$${tierMonthlyVal.toLocaleString()}</td>
+            <td style="color: var(--green); font-weight: bold;">${tierRoi}x</td>
+        </tr>`;
+    }
+
+    // Totals row
+    const totalTierInvestment = activeUsers * licenseCost;
+    tierRows += `<tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700;">
+        <td>ALL USERS</td>
+        <td>${activeUsers.toLocaleString()}</td>
+        <td>${avgMonthly.toFixed(0)}</td>
+        <td>$${totalTierInvestment.toLocaleString()}</td>
+        <td>$${metrics.valuePerMonth.toLocaleString()}</td>
+        <td style="color: var(--green);">${metrics.roiMultiple.toFixed(1)}x</td>
+    </tr>`;
+
+    const tierHtml = `
+        <div class="roi-table-container">
+            <h2>Usage Tier Value Distribution</h2>
+            <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
+                ${uploadedData.groupLabel || 'Teams'} segmented into performance tiers by Copilot actions per user.
+                Investment at $${licenseCost}/user/month.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>User Tier</th><th>Active Users</th><th>Actions/Month</th><th>Monthly Investment</th><th>Monthly Value</th><th>ROI</th></tr>
+                </thead>
+                <tbody>${tierRows}</tbody>
+            </table>
+        </div>`;
+
+    // ---- 3-YEAR PROJECTION TABLE ----
+    const scaledMonthly = metrics.valuePerMonth;
+    const scaledAnnual = scaledMonthly * 12;
+    const annualCost = metrics.annualCost;
+
+    // Expansion scenarios: 2x, 3x, 5x current users
+    const expansionMultiples = [2, 3, 5];
+    let projRows = `
+        <tr>
+            <td><strong>Current deployment</strong></td>
+            <td>${totalUsers.toLocaleString()}</td>
+            <td>$${scaledMonthly.toLocaleString()}</td>
+            <td>$${scaledAnnual.toLocaleString()}</td>
+            <td>$${annualCost.toLocaleString()}</td>
+            <td style="color: var(--green); font-weight: bold;">${metrics.roiMultiple.toFixed(1)}x</td>
+        </tr>`;
+
+    expansionMultiples.forEach(mult => {
+        const expUsers = totalUsers * mult;
+        const scenarios = [
+            { label: `${expUsers.toLocaleString()} users @ 50%`, factor: mult * 0.5 },
+            { label: `${expUsers.toLocaleString()} users @ 100%`, factor: mult },
+        ];
+        scenarios.forEach(s => {
+            const mv = scaledMonthly * s.factor;
+            const av = mv * 12;
+            const ac = expUsers * licenseCost * 12;
+            const roi = ac > 0 ? (av / ac).toFixed(1) : '0.0';
+            projRows += `<tr>
+                <td>${s.label} adoption</td>
+                <td>${expUsers.toLocaleString()}</td>
+                <td>$${mv.toLocaleString()}</td>
+                <td>$${av.toLocaleString()}</td>
+                <td>$${ac.toLocaleString()}</td>
+                <td style="color: var(--green); font-weight: bold;">${roi}x</td>
+            </tr>`;
+        });
+    });
+
+    const projHtml = `
+        <div class="roi-table-container">
+            <h2>Expansion Projections</h2>
+            <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
+                Projected value if current usage patterns hold as deployment scales.
+                50% scenarios assume new users need ramp time. All values at ${mpa} min/action, $${rate}/hr.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Scenario</th><th>Users</th><th>Monthly Value</th><th>Annual Value</th><th>Annual Cost</th><th>ROI</th></tr>
+                </thead>
+                <tbody>${projRows}</tbody>
+            </table>
+            <div class="info-box" style="margin-top:1rem;">
+                <p><strong>Note:</strong> Projections assume new users achieve the same average actions per user as the current deployment.
+                The 50% scenarios provide a conservative ramp-up estimate. Adjust the minutes-per-action and professional rate
+                settings to model different assumptions.</p>
+            </div>
+        </div>`;
+
+    return breakEvenHtml + tierHtml + projHtml;
+}
+
 // Render results page
 function renderResults() {
     const metrics = calculateMetrics(uploadedData);
@@ -687,6 +879,8 @@ function renderResults() {
                     </tbody>
                 </table>
             </div>
+
+            ${buildProjectionTables(metrics, sortedTeams)}
 
             <div class="info-box" style="margin-top: 2rem;">
                 <strong>Calculation Methodology</strong>

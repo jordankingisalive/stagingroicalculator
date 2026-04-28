@@ -829,14 +829,14 @@ function buildProjectionTables(metrics, sortedTeams) {
         const potentialValue = avgValuePerActiveUser * unlicensedUsageFactor * count;
         const licensingCost = licenseCost * count;
         const netGain = potentialValue - licensingCost;
-        const roi = licensingCost > 0 ? (potentialValue / licensingCost).toFixed(1) : '0.0';
+        const annualOpportunityCost = netGain * 12;
         unlicensedRows += `<tr>
             <td>${count.toLocaleString()}</td>
             <td>${totalActions.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
             <td>$${licensingCost.toLocaleString()}</td>
             <td>$${potentialValue.toLocaleString()}</td>
             <td style="color: ${netGain >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${netGain.toLocaleString()}</td>
-            <td style="color: ${parseFloat(roi) >= 1 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">${roi}x</td>
+            <td style="color: ${annualOpportunityCost >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${annualOpportunityCost.toLocaleString()}</td>
         </tr>`;
     });
 
@@ -850,7 +850,7 @@ function buildProjectionTables(metrics, sortedTeams) {
             </p>
             <table>
                 <thead>
-                    <tr><th>Unlicensed Users</th><th>Actions/Mo</th><th>Licensing Cost/Mo</th><th>Potential Value/Mo</th><th>Net Gain/Mo</th><th>ROI</th></tr>
+                    <tr><th>Unlicensed Users</th><th>Actions/Mo</th><th>Licensing Cost/Mo</th><th>Potential Value/Mo</th><th>Net Gain/Mo</th><th>Annual Opportunity</th></tr>
                 </thead>
                 <tbody>${unlicensedRows}</tbody>
             </table>

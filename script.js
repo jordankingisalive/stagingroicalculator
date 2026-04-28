@@ -105,6 +105,8 @@ function handleFile(file) {
             const csvData = e.target.result;
             uploadedData = parseCSV(csvData);
             config.analysisWeeks = uploadedData.detectedWeeks || 26;
+            const weeksInput = document.getElementById('analysisWeeks');
+            if (weeksInput) weeksInput.value = config.analysisWeeks;
             showFilePreview(file.name, uploadedData);
         } catch (error) {
             showError('Error processing file: ' + error.message);
@@ -189,6 +191,7 @@ function syncConfigFromInputs() {
     config.professionalRate = parseFloat(document.getElementById('professionalRate').value) || 0;
     config.minutesPerAction = parseFloat(document.getElementById('minutesPerAction').value) || 6;
     config.intelligentRecapActions = parseInt(document.getElementById('intelligentRecapActions').value) || 0;
+    config.analysisWeeks = parseInt(document.getElementById('analysisWeeks').value) || config.analysisWeeks || 26;
 }
 
 // Run calculation (triggered by Calculate button)
@@ -403,9 +406,17 @@ function flattenData(rows) {
             })
             .filter(row => row.enabledUsers > 0 || row.activeUsers > 0);
 
-        const detectedWeeks = sortedDates.length;
+        let detectedWeeks = sortedDates.length;
+        if (sortedDates.length >= 2) {
+            const earliest = new Date(sortedDates[0]);
+            const latest = new Date(sortedDates[sortedDates.length - 1]);
+            const spanDays = (latest - earliest) / (1000 * 60 * 60 * 24);
+            const spanWeeks = Math.round(spanDays / 7) + 1;
+            detectedWeeks = Math.max(spanWeeks, sortedDates.length);
+        }
         console.log(`Parsed ${flattenedData.length} organizations from wide format (${detectedWeeks} weeks)`);
-        return { rows: flattenedData, mapping: {}, weeklyData: orgWeeklyData, groupLabel, detectedWeeks };
+        const dateRange = sortedDates.length >= 2 ? `${sortedDates[0]} to ${sortedDates[sortedDates.length - 1]}` : '';
+        return { rows: flattenedData, mapping: {}, weeklyData: orgWeeklyData, groupLabel, detectedWeeks, dateRange };
     }
 
     // --- LONG FORMAT fallback ---
@@ -519,15 +530,24 @@ function flattenData(rows) {
         })
         .filter(row => row.enabledUsers > 0 || row.activeUsers > 0);
 
-    // Count distinct weeks across all orgs
+    // Calculate analysis period span from earliest to latest date
     const allDates = new Set();
     for (const weeks of Object.values(orgWeeklyData)) {
         weeks.forEach(w => allDates.add(w.date.toISOString().slice(0, 10)));
     }
-    const detectedWeeks = allDates.size || 1;
-    console.log(`Detected ${detectedWeeks} weeks of data`);
+    const sortedDateStrings = [...allDates].sort();
+    let detectedWeeks = allDates.size || 1;
+    if (sortedDateStrings.length >= 2) {
+        const earliest = new Date(sortedDateStrings[0]);
+        const latest = new Date(sortedDateStrings[sortedDateStrings.length - 1]);
+        const spanDays = (latest - earliest) / (1000 * 60 * 60 * 24);
+        const spanWeeks = Math.round(spanDays / 7) + 1; // +1 to include both endpoints
+        detectedWeeks = Math.max(spanWeeks, allDates.size);
+    }
+    console.log(`Detected ${detectedWeeks} weeks of data (${sortedDateStrings.length} snapshots, span: ${sortedDateStrings[0]} to ${sortedDateStrings[sortedDateStrings.length - 1]})`);
+    const dateRange = sortedDateStrings.length >= 2 ? `${sortedDateStrings[0]} to ${sortedDateStrings[sortedDateStrings.length - 1]}` : '';
 
-    return { rows: flattenedData, mapping, weeklyData: orgWeeklyData, groupLabel, detectedWeeks };
+    return { rows: flattenedData, mapping, weeklyData: orgWeeklyData, groupLabel, detectedWeeks, dateRange };
 }
 
 // Parse number from string (handles percentages, commas, etc.)
@@ -850,7 +870,7 @@ function renderResults() {
         <div class="results-container">
             <header>
                 <h1>M365 Copilot Productivity ROI Analysis Results</h1>
-                <p class="subtitle">Based on ${rows.length} ${uploadedData.groupLabel || 'teams'} • ${config.analysisWeeks} weeks of data</p>
+                <p class="subtitle">Based on ${rows.length} ${uploadedData.groupLabel || 'teams'} • ${config.analysisWeeks} weeks of data${uploadedData.dateRange ? ` (${uploadedData.dateRange})` : ''}</p>
             </header>
 
             ${showRecap ? `

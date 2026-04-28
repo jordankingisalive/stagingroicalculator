@@ -105,8 +105,6 @@ function handleFile(file) {
             const csvData = e.target.result;
             uploadedData = parseCSV(csvData);
             config.analysisWeeks = uploadedData.detectedWeeks || 26;
-            const weeksInput = document.getElementById('analysisWeeks');
-            if (weeksInput) weeksInput.value = config.analysisWeeks;
             showFilePreview(file.name, uploadedData);
         } catch (error) {
             showError('Error processing file: ' + error.message);
@@ -191,7 +189,6 @@ function syncConfigFromInputs() {
     config.professionalRate = parseFloat(document.getElementById('professionalRate').value) || 0;
     config.minutesPerAction = parseFloat(document.getElementById('minutesPerAction').value) || 6;
     config.intelligentRecapActions = parseInt(document.getElementById('intelligentRecapActions').value) || 0;
-    config.analysisWeeks = parseInt(document.getElementById('analysisWeeks').value) || config.analysisWeeks || 26;
 }
 
 // Run calculation (triggered by Calculate button)

@@ -820,15 +820,19 @@ function buildProjectionTables(metrics, sortedTeams) {
     const costPer100Licenses = licenseCost * 100;
     const netOpportunityCostPer100 = valuePer100Unlicensed - costPer100Licenses;
 
+    const unlicensedActionsPerMonth = avgMonthly * unlicensedUsageFactor;
+
     const unlicensedScenarios = [100, 250, 500, 1000, 2500, 5000];
     let unlicensedRows = '';
     unlicensedScenarios.forEach(count => {
+        const totalActions = unlicensedActionsPerMonth * count;
         const potentialValue = avgValuePerActiveUser * unlicensedUsageFactor * count;
         const licensingCost = licenseCost * count;
         const netGain = potentialValue - licensingCost;
         const roi = licensingCost > 0 ? (potentialValue / licensingCost).toFixed(1) : '0.0';
         unlicensedRows += `<tr>
             <td>${count.toLocaleString()}</td>
+            <td>${totalActions.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
             <td>$${licensingCost.toLocaleString()}</td>
             <td>$${potentialValue.toLocaleString()}</td>
             <td style="color: ${netGain >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${netGain.toLocaleString()}</td>
@@ -842,11 +846,11 @@ function buildProjectionTables(metrics, sortedTeams) {
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
                 Estimated productivity left on the table for employees without a Copilot license.<br>
                 Assumes unlicensed users would adopt at <strong>10%</strong> of the current licensed-user average
-                (<strong>$${avgValuePerActiveUser.toFixed(0)}</strong>/user/mo × 10% = <strong>$${(avgValuePerActiveUser * unlicensedUsageFactor).toFixed(0)}</strong>/user/mo).
+                (~<strong>${unlicensedActionsPerMonth.toFixed(0)} actions/user/mo</strong>, worth <strong>$${(avgValuePerActiveUser * unlicensedUsageFactor).toFixed(0)}</strong>/user/mo).
             </p>
             <table>
                 <thead>
-                    <tr><th>Unlicensed Users</th><th>Licensing Cost/Mo</th><th>Potential Value/Mo</th><th>Net Gain/Mo</th><th>ROI</th></tr>
+                    <tr><th>Unlicensed Users</th><th>Actions/Mo</th><th>Licensing Cost/Mo</th><th>Potential Value/Mo</th><th>Net Gain/Mo</th><th>ROI</th></tr>
                 </thead>
                 <tbody>${unlicensedRows}</tbody>
             </table>

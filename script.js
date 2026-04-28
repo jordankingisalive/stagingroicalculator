@@ -874,25 +874,25 @@ function renderResults() {
 
             <div class="metrics-grid">
                 <div class="metric-card">
-                    <div class="metric-label">Enabled Users</div>
+                    <div class="metric-label"><span class="metric-label-row">Enabled Users <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The total number of people in your organization who have been assigned a Microsoft 365 Copilot license.</span></span></span></div>
                     <div class="metric-value">${metrics.totalEnabledUsers.toLocaleString()}</div>
                     <div class="metric-sublabel">Licensed for Copilot</div>
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label">Activation Rate</div>
+                    <div class="metric-label"><span class="metric-label-row">Activation Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">Of all the people who have a Copilot license, this is the percentage who actually used it at least once. For example, if 100 people have licenses and 60 used Copilot, the activation rate is 60%.</span></span></span></div>
                     <div class="metric-value">${metrics.activationRate.toFixed(1)}%</div>
                     <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString()} active users</div>
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label">Weekly Actions per User</div>
+                    <div class="metric-label"><span class="metric-label-row">Weekly Actions per User <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.</span></span></span></div>
                     <div class="metric-value">${metrics.avgActionsPerUser.toFixed(1)}</div>
                     <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString()} total/week</div>
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label">Weekly Hours Saved</div>
+                    <div class="metric-label"><span class="metric-label-row">Weekly Hours Saved <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">Estimated time saved per week across all users. Calculated by multiplying total weekly Copilot actions by the configured minutes saved per action, then converting to hours.</span></span></span></div>
                     <div class="metric-value">${metrics.weeklyHoursSaved.toLocaleString(0)}</div>
                     <div class="metric-sublabel">Conservative estimate</div>
                 </div>

@@ -811,7 +811,55 @@ function buildProjectionTables(metrics, sortedTeams) {
             </div>
         </div>`;
 
-    return breakEvenHtml + tierHtml + projHtml;
+    // ---- UNLICENSED USER OPPORTUNITY COST ----
+    // Average monthly productivity value per active licensed user
+    const avgValuePerActiveUser = activeUsers > 0 ? metrics.valuePerMonth / activeUsers : 0;
+    // Unlicensed users assumed to use Copilot at 10% of licensed user average
+    const unlicensedUsageFactor = 0.10;
+    const valuePer100Unlicensed = avgValuePerActiveUser * unlicensedUsageFactor * 100;
+    const costPer100Licenses = licenseCost * 100;
+    const netOpportunityCostPer100 = valuePer100Unlicensed - costPer100Licenses;
+
+    const unlicensedScenarios = [100, 250, 500, 1000, 2500, 5000];
+    let unlicensedRows = '';
+    unlicensedScenarios.forEach(count => {
+        const potentialValue = avgValuePerActiveUser * unlicensedUsageFactor * count;
+        const licensingCost = licenseCost * count;
+        const netGain = potentialValue - licensingCost;
+        const roi = licensingCost > 0 ? (potentialValue / licensingCost).toFixed(1) : '0.0';
+        unlicensedRows += `<tr>
+            <td>${count.toLocaleString()}</td>
+            <td>$${licensingCost.toLocaleString()}</td>
+            <td>$${potentialValue.toLocaleString()}</td>
+            <td style="color: ${netGain >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${netGain.toLocaleString()}</td>
+            <td style="color: ${parseFloat(roi) >= 1 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">${roi}x</td>
+        </tr>`;
+    });
+
+    const opportunityHtml = `
+        <div class="roi-table-container">
+            <h2>Unlicensed User Opportunity Cost</h2>
+            <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
+                Estimated productivity left on the table for employees without a Copilot license.<br>
+                Assumes unlicensed users would adopt at <strong>10%</strong> of the current licensed-user average
+                (<strong>$${avgValuePerActiveUser.toFixed(0)}</strong>/user/mo × 10% = <strong>$${(avgValuePerActiveUser * unlicensedUsageFactor).toFixed(0)}</strong>/user/mo).
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Unlicensed Users</th><th>Licensing Cost/Mo</th><th>Potential Value/Mo</th><th>Net Gain/Mo</th><th>ROI</th></tr>
+                </thead>
+                <tbody>${unlicensedRows}</tbody>
+            </table>
+            <div class="info-box" style="margin-top:1rem;">
+                <p><strong>How is this calculated?</strong><br>
+                Your current licensed users generate an average of <strong>$${avgValuePerActiveUser.toFixed(0)}/user/month</strong> in productivity value.
+                Unlicensed users are conservatively estimated at <strong>10% of that rate</strong> ($${(avgValuePerActiveUser * unlicensedUsageFactor).toFixed(0)}/user/month),
+                reflecting minimal initial adoption with no training or enablement.
+                Even at this conservative level, the productivity gained can exceed the licensing cost — representing a clear opportunity cost of <em>not</em> licensing these users.</p>
+            </div>
+        </div>`;
+
+    return breakEvenHtml + tierHtml + opportunityHtml + projHtml;
 }
 
 // Render results page

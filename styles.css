@@ -650,44 +650,6 @@ tr:hover {
     margin-bottom: 1.5rem;
 }
 
-.leaderboard-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    border-bottom: 1px solid var(--border);
-    transition: background 0.2s ease;
-}
-
-.leaderboard-item:hover {
-    background: rgba(74, 158, 247, 0.06);
-}
-
-.leaderboard-rank {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: var(--copilot-cyan);
-    min-width: 40px;
-}
-
-.leaderboard-name {
-    flex: 1;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.leaderboard-value {
-    font-size: 1.25rem;
-    font-weight: bold;
-    color: var(--green);
-}
-
-.leaderboard-subvalue {
-    font-size: 0.9rem;
-    color: var(--gray);
-    margin-left: 1rem;
-}
-
 /* Collapsible Sections */
 .collapsible-section {
     background: var(--surface);
@@ -742,18 +704,7 @@ details.collapsible-section:not([open]) .toggle-chevron {
     background: transparent;
 }
 
-/* Print: respect collapsed state */
-@media print {
-    details.collapsible-section:not([open]) .section-body {
-        display: none !important;
-    }
-    .section-toggle {
-        page-break-after: avoid;
-    }
-    .toggle-chevron {
-        display: none;
-    }
-}
+/* All print styles consolidated below */
 
 /* Glossary */
 .glossary-table td:first-child {
@@ -842,12 +793,26 @@ input:checked + .toggle-slider:hover {
 }
 
 /* Responsive Design */
-/* PDF Export Styling */
+/* Consolidated Print Styles */
 @media print {
+    details.collapsible-section:not([open]) .section-body {
+        display: none !important;
+    }
+    .section-toggle {
+        page-break-after: avoid;
+    }
+    .toggle-chevron {
+        display: none;
+    }
+
     .nav-buttons,
     .header-actions,
     .action-btn,
-    button {
+    button,
+    .opp-slider-row,
+    .toggle-switch,
+    .opp-toggle-row,
+    input[type="range"] {
         display: none !important;
     }
 

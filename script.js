@@ -1,8 +1,6 @@
 // Global state
 let uploadedData = null;
 let resultsDisplayed = false;
-// Format number with max 2 decimal places
-const fmt2 = (n) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 // Tooltip helper — returns inline HTML for a hover ? icon with explanation
 const tip = (text) => `<span class="info-tip"><span class="info-icon">?</span><span class="tip-text">${text}</span></span>`;
 // Collapsible section wrapper — renders as <details open> so user can collapse before PDF export
@@ -156,8 +154,6 @@ function handleFile(file) {
 function showFilePreview(fileName, data) {
     const rows = data.rows;
     const totalUsers = rows.reduce((s, r) => s + r.enabledUsers, 0);
-    const totalActive = rows.reduce((s, r) => s + r.activeUsers, 0);
-    const activationRate = totalUsers > 0 ? ((totalActive / totalUsers) * 100).toFixed(1) : '0.0';
     const totalWeeklyActions = rows.reduce((s, r) => s + r.weeklyActions, 0);
     const groupLabel = data.groupLabel || 'teams';
 
@@ -781,10 +777,10 @@ function buildProjectionTables(metrics, sortedTeams) {
 
         tierRows += `<tr>
             <td><span style="color:${tier.color}; font-weight:700;">${tier.name}</span></td>
-            <td>${tierUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+            <td>${tierUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
             <td>${tierMonthly.toFixed(0)}</td>
-            <td>$${tierInvestment.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-            <td>$${tierMonthlyVal.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+            <td>$${tierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>$${tierMonthlyVal.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
             <td style="color: var(--green); font-weight: bold;">${tierRoi}x</td>
         </tr>`;
     });
@@ -793,10 +789,10 @@ function buildProjectionTables(metrics, sortedTeams) {
     const totalTierInvestment = totalUsers * licenseCost;
     tierRows += `<tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700;">
         <td>ALL USERS</td>
-        <td>${activeUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+        <td>${activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
         <td>${avgMonthly.toFixed(0)}</td>
-        <td>$${totalTierInvestment.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-        <td>$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+        <td>$${totalTierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+        <td>$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
         <td style="color: var(--green);">${metrics.roiMultiple.toFixed(1)}x</td>
     </tr>`;
 
@@ -1096,9 +1092,9 @@ function renderResults() {
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Power User Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The percentage of users who are heavy Copilot adopters — using it frequently and across multiple features. This measures depth of adoption, not just whether someone tried it once.</span></span></span></div>
+                    <div class="metric-label"><span class="metric-label-row">Super User Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The percentage of licensed users classified as Super Users — averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. These are your AI champions.</span></span></span></div>
                     <div class="metric-value">${metrics.powerUserRate.toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users</div>
+                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} super users</div>
                 </div>
 
                 <div class="metric-card">
@@ -1174,11 +1170,11 @@ function renderResults() {
                         </tr>
                         <tr>
                             <td colspan="5" style="background: var(--light-gray); padding: 1rem;">
-                                <strong>Investment:</strong> $${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 2})}/month
-                                ($${metrics.annualCost.toLocaleString(undefined, {maximumFractionDigits: 2})}/year) for ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 2})} licenses at $${config.licenseCost}/user/month<br>
+                                <strong>Investment:</strong> $${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/month
+                                ($${metrics.annualCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/year) for ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licenses at $${config.licenseCost}/user/month<br>
                                 <strong>Professional Rate:</strong> $${config.professionalRate}/hour (fully-loaded cost)<br>
-                                <strong>Calculation:</strong> ${metrics.totalMonthlyActions.toLocaleString(undefined, {maximumFractionDigits: 2})} monthly actions × ${metrics.minsPerAction} min ÷ 60 × $${config.professionalRate}/hr = $${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})}
-                                ${showRecap ? `<br><strong>Intelligent Recap:</strong> ${config.intelligentRecapActions.toLocaleString(undefined, {maximumFractionDigits: 2})} actions × 0.5 hrs × $${config.professionalRate}/hr = $${recapMonthlyValue.toLocaleString(undefined, {maximumFractionDigits: 2})}/mo` : ''}
+                                <strong>Calculation:</strong> ${metrics.totalMonthlyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} monthly actions × ${metrics.minsPerAction} min ÷ 60 × $${config.professionalRate}/hr = $${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                                ${showRecap ? `<br><strong>Intelligent Recap:</strong> ${config.intelligentRecapActions.toLocaleString(undefined, {maximumFractionDigits: 0})} actions × 0.5 hrs × $${config.professionalRate}/hr = $${recapMonthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo` : ''}
                             </td>
                         </tr>
                     </tbody>
@@ -1190,7 +1186,7 @@ function renderResults() {
                 <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
                 <table>
                     <thead>
-                        <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users</th><th>Avg Days/Wk</th><th>Power Users</th><th>Actions/User</th><th>Monthly Value</th><th>Hrs/Week</th></tr>
+                        <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users</th><th>Avg Days/Wk</th><th>Super Users</th><th>Actions/User</th><th>Monthly Value</th><th>Hrs/Week</th></tr>
                     </thead>
                     <tbody>
                         ${sortedTeams.slice(0, 10).map((team, index) => `
@@ -1220,7 +1216,7 @@ function renderResults() {
                                 Active Users <span class="sort-icon"></span>
                             </th>
                             <th class="sortable" data-column="powerUsers" data-type="number">
-                                Power Users <span class="sort-icon"></span>
+                                Super Users <span class="sort-icon"></span>
                             </th>
                             <th class="sortable" data-column="weeklyActions" data-type="number">
                                 Weekly Actions <span class="sort-icon"></span>
@@ -1248,13 +1244,13 @@ function renderResults() {
                             return `
                             <tr>
                                 <td data-value="${team.team}">${team.team}</td>
-                                <td data-value="${team.activeUsers}">${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-                                <td data-value="${team.powerUsers}">${team.powerUsers} users</td>
-                                <td data-value="${team.weeklyActions}">${team.weeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+                                <td data-value="${team.activeUsers}">${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                                <td data-value="${team.powerUsers}">${team.powerUsers}</td>
+                                <td data-value="${team.weeklyActions}">${team.weeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                                 <td data-value="${team.actionsPerUser}">${team.actionsPerUser.toFixed(1)}</td>
                                 <td data-value="${team.peakWeek ? team.peakWeek.getTime() : 0}">${peakWeekDisplay}</td>
                                 <td data-value="${team.weeklyHours}">${team.weeklyHours.toFixed(0)}</td>
-                                <td data-value="${team.monthlyValue}"><strong>$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 2})}</strong></td>
+                                <td data-value="${team.monthlyValue}"><strong>$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong></td>
                             </tr>
                         `}).join('')}
                     </tbody>
@@ -1285,16 +1281,16 @@ function renderResults() {
                     <tr><td><strong>Adoption Rate</strong></td><td>The percentage of licensed users who are actively using Copilot on an ongoing basis. Unlike activation, adoption reflects sustained usage over time.</td></tr>
                     <tr><td><strong>Copilot Action</strong></td><td>Any discrete interaction with Microsoft 365 Copilot — e.g., accepting a suggested edit, using Copilot Chat, generating a summary, drafting an email, or creating a presentation outline.</td></tr>
                     <tr><td><strong>Enabled User</strong></td><td>An employee who has been assigned a Microsoft 365 Copilot license, whether or not they have used it.</td></tr>
-                    <tr><td><strong>Expansion Projection</strong></td><td>A modeled estimate of ROI at larger deployment scales, accounting for lower adoption rates as the user base grows beyond early adopters.</td></tr>
+                    <tr><td><strong>Expansion Projection</strong></td><td>A modeled estimate of ROI at larger deployment scales, using increasing per-user actions to reflect network effects as more employees adopt Copilot.</td></tr>
                     <tr><td><strong>Fully-Loaded Cost</strong></td><td>The true cost of an employee hour including salary, benefits, taxes, and overhead — not just base pay. Used as the "professional rate" in ROI calculations.</td></tr>
                     <tr><td><strong>Intelligent Recap</strong></td><td>A Copilot feature that automatically summarizes Teams meetings, extracting key decisions, action items, and discussion topics so attendees (and non-attendees) save time on meeting follow-up.</td></tr>
                     <tr><td><strong>MAU (Monthly Active Users)</strong></td><td>The count of unique users who performed at least one Copilot action in the past 28 days.</td></tr>
                     <tr><td><strong>Minutes per Action</strong></td><td>The estimated time saved each time a user completes a Copilot action. Default is 6 minutes based on Microsoft research; adjustable to reflect your organization's experience.</td></tr>
                     <tr><td><strong>Opportunity Cost</strong></td><td>The productivity value your organization forgoes by not licensing additional users. Calculated at a conservative 10% of current licensed-user adoption rates.</td></tr>
-                    <tr><td><strong>Power User</strong></td><td>A user who uses Copilot frequently and across multiple M365 apps. Power users represent depth of adoption and are your best internal champions for driving broader usage.</td></tr>
-                    <tr><td><strong>Power User Rate</strong></td><td>The percentage of all licensed users classified as power users.</td></tr>
                     <tr><td><strong>Productivity Value</strong></td><td>The dollar value of time saved, calculated as: number of actions × minutes per action ÷ 60 × professional hourly rate.</td></tr>
                     <tr><td><strong>ROI Multiple</strong></td><td>Monthly productivity value divided by monthly license cost. An ROI of 3.0x means every $1 spent on Copilot licenses returns $3 in estimated productivity value.</td></tr>
+                    <tr><td><strong>Super User</strong></td><td>A user averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. Super Users are both high-volume and habitual — your AI champions who drive peer adoption and can be leveraged for internal enablement.</td></tr>
+                    <tr><td><strong>Super User Rate</strong></td><td>The percentage of all licensed users classified as Super Users.</td></tr>
                     <tr><td><strong>Super Usage Report</strong></td><td>A Power BI report (<a href="https://aka.ms/decodingsuperusage" target="_blank" style="color:var(--copilot-cyan);">aka.ms/decodingsuperusage</a>) that provides a heatmap view of Copilot usage across your organization, broken out by team/division.</td></tr>
                     <tr><td><strong>Usage Tier</strong></td><td>A percentile band (Top 10%, 75-90%, etc.) that groups teams by their average Copilot actions per user, helping identify champions and teams that need enablement.</td></tr>
                     <tr><td><strong>WAU (Weekly Active Users)</strong></td><td>The count of unique users who performed at least one Copilot action in the most recent week.</td></tr>

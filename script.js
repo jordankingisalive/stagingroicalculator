@@ -1092,9 +1092,9 @@ function renderResults() {
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Super User Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The percentage of licensed users classified as Super Users — averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. These are your AI champions.</span></span></span></div>
+                    <div class="metric-label"><span class="metric-label-row">Power User Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The percentage of licensed users classified as Power Users — averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. These are your AI champions.</span></span></span></div>
                     <div class="metric-value">${metrics.powerUserRate.toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} super users</div>
+                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users</div>
                 </div>
 
                 <div class="metric-card">
@@ -1186,7 +1186,7 @@ function renderResults() {
                 <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
                 <table>
                     <thead>
-                        <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users</th><th>Super Users</th><th>Actions/User</th><th>Monthly Value</th><th>Hrs/Week</th></tr>
+                        <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users</th><th>Power Users</th><th>Actions/User</th><th>Monthly Value</th><th>Hrs/Week</th></tr>
                     </thead>
                     <tbody>
                         ${sortedTeams.slice(0, 10).map((team, index) => `
@@ -1215,7 +1215,7 @@ function renderResults() {
                                 Active Users <span class="sort-icon"></span>
                             </th>
                             <th class="sortable" data-column="powerUsers" data-type="number">
-                                Super Users <span class="sort-icon"></span>
+                                Power Users <span class="sort-icon"></span>
                             </th>
                             <th class="sortable" data-column="weeklyActions" data-type="number">
                                 Weekly Actions <span class="sort-icon"></span>
@@ -1288,8 +1288,8 @@ function renderResults() {
                     <tr><td><strong>Opportunity Cost</strong></td><td>The productivity value your organization forgoes by not licensing additional users. Calculated at a conservative 10% of current licensed-user adoption rates.</td></tr>
                     <tr><td><strong>Productivity Value</strong></td><td>The dollar value of time saved, calculated as: number of actions × minutes per action ÷ 60 × professional hourly rate.</td></tr>
                     <tr><td><strong>ROI Multiple</strong></td><td>Monthly productivity value divided by monthly license cost. An ROI of 3.0x means every $1 spent on Copilot licenses returns $3 in estimated productivity value.</td></tr>
-                    <tr><td><strong>Super User</strong></td><td>A user averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. Super Users are both high-volume and habitual — your AI champions who drive peer adoption and can be leveraged for internal enablement.</td></tr>
-                    <tr><td><strong>Super User Rate</strong></td><td>The percentage of all licensed users classified as Super Users.</td></tr>
+                    <tr><td><strong>Power User</strong></td><td>A user averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. Power Users are both high-volume and habitual — your AI champions who drive peer adoption and can be leveraged for internal enablement.</td></tr>
+                    <tr><td><strong>Power User Rate</strong></td><td>The percentage of all licensed users classified as Power Users.</td></tr>
                     <tr><td><strong>Super Usage Report</strong></td><td>A Power BI report (<a href="https://aka.ms/decodingsuperusage" target="_blank" style="color:var(--copilot-cyan);">aka.ms/decodingsuperusage</a>) that provides a heatmap view of Copilot usage across your organization, broken out by team/division.</td></tr>
                     <tr><td><strong>Usage Tier</strong></td><td>A percentile band (Top 10%, 75-90%, etc.) that groups teams by their average Copilot actions per user, helping identify champions and teams that need enablement.</td></tr>
                     <tr><td><strong>Weekly Actions per User</strong></td><td>The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.</td></tr>

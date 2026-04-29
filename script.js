@@ -19,6 +19,24 @@ let config = {
     intelligentRecapActions: 0
 };
 
+// Position tooltips dynamically (fixed positioning to escape overflow containers)
+document.addEventListener('mouseover', function(e) {
+    const icon = e.target.closest('.info-tip');
+    if (!icon) return;
+    const tip = icon.querySelector('.tip-text');
+    if (!tip) return;
+    const rect = icon.getBoundingClientRect();
+    const tipW = 260;
+    let left = rect.left + rect.width / 2 - tipW / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tipW - 8));
+    tip.style.left = left + 'px';
+    tip.style.top = (rect.top - tip.offsetHeight - 10) + 'px';
+    // If it would go off-screen top, show below instead
+    if (rect.top - tip.offsetHeight - 10 < 8) {
+        tip.style.top = (rect.bottom + 10) + 'px';
+    }
+});
+
 // Initialize upload functionality
 document.addEventListener('DOMContentLoaded', function() {
     const uploadArea = document.getElementById('uploadArea');

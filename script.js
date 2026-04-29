@@ -1342,6 +1342,9 @@ async function exportToPDF() {
     }
 
     try {
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+            throw new Error('PDF library failed to load. Please check your internet connection and refresh the page.');
+        }
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pageW = 210, pageH = 297, margin = 8;

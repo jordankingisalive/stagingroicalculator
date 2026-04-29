@@ -1054,12 +1054,6 @@ function renderResults() {
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Activation Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">Of all the people who have a Copilot license, this is the percentage who actually used it at least once. For example, if 100 people have licenses and 60 used Copilot, the activation rate is 60%.</span></span></span></div>
-                    <div class="metric-value">${metrics.activationRate.toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} ÷ ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licensed</div>
-                </div>
-
-                <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Power User Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The percentage of users who are heavy Copilot adopters — using it frequently and across multiple features. This measures depth of adoption, not just whether someone tried it once.</span></span></span></div>
                     <div class="metric-value">${metrics.powerUserRate.toFixed(1)}%</div>
                     <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users</div>

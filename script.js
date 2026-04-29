@@ -1251,6 +1251,31 @@ function renderResults() {
             </div>
             `)}<!-- end Methodology -->
 
+            ${section('Glossary', `
+            <table class="glossary-table">
+                <tbody>
+                    <tr><td><strong>Activation Rate</strong></td><td>The percentage of licensed users who have used Copilot at least once. A high activation rate means licenses are not going unused.</td></tr>
+                    <tr><td><strong>Active User</strong></td><td>A user who performed at least one Copilot action during the reporting period (typically one week).</td></tr>
+                    <tr><td><strong>Adoption Rate</strong></td><td>The percentage of licensed users who are actively using Copilot on an ongoing basis. Unlike activation, adoption reflects sustained usage over time.</td></tr>
+                    <tr><td><strong>Copilot Action</strong></td><td>Any discrete interaction with Microsoft 365 Copilot — e.g., accepting a suggested edit, using Copilot Chat, generating a summary, drafting an email, or creating a presentation outline.</td></tr>
+                    <tr><td><strong>Enabled User</strong></td><td>An employee who has been assigned a Microsoft 365 Copilot license, whether or not they have used it.</td></tr>
+                    <tr><td><strong>Expansion Projection</strong></td><td>A modeled estimate of ROI at larger deployment scales, accounting for lower adoption rates as the user base grows beyond early adopters.</td></tr>
+                    <tr><td><strong>Fully-Loaded Cost</strong></td><td>The true cost of an employee hour including salary, benefits, taxes, and overhead — not just base pay. Used as the "professional rate" in ROI calculations.</td></tr>
+                    <tr><td><strong>Intelligent Recap</strong></td><td>A Copilot feature that automatically summarizes Teams meetings, extracting key decisions, action items, and discussion topics so attendees (and non-attendees) save time on meeting follow-up.</td></tr>
+                    <tr><td><strong>MAU (Monthly Active Users)</strong></td><td>The count of unique users who performed at least one Copilot action in the past 28 days.</td></tr>
+                    <tr><td><strong>Minutes per Action</strong></td><td>The estimated time saved each time a user completes a Copilot action. Default is 6 minutes based on Microsoft research; adjustable to reflect your organization's experience.</td></tr>
+                    <tr><td><strong>Opportunity Cost</strong></td><td>The productivity value your organization forgoes by not licensing additional users. Calculated at a conservative 10% of current licensed-user adoption rates.</td></tr>
+                    <tr><td><strong>Power User</strong></td><td>A user who uses Copilot frequently and across multiple M365 apps. Power users represent depth of adoption and are your best internal champions for driving broader usage.</td></tr>
+                    <tr><td><strong>Power User Rate</strong></td><td>The percentage of all licensed users classified as power users.</td></tr>
+                    <tr><td><strong>Productivity Value</strong></td><td>The dollar value of time saved, calculated as: number of actions × minutes per action ÷ 60 × professional hourly rate.</td></tr>
+                    <tr><td><strong>ROI Multiple</strong></td><td>Monthly productivity value divided by monthly license cost. An ROI of 3.0x means every $1 spent on Copilot licenses returns $3 in estimated productivity value.</td></tr>
+                    <tr><td><strong>Super Usage Report</strong></td><td>A Power BI report (<a href="https://aka.ms/decodingsuperusage" target="_blank" style="color:var(--copilot-cyan);">aka.ms/decodingsuperusage</a>) that provides a heatmap view of Copilot usage across your organization, broken out by team/division.</td></tr>
+                    <tr><td><strong>Usage Tier</strong></td><td>A percentile band (Top 10%, 75-90%, etc.) that groups teams by their average Copilot actions per user, helping identify champions and teams that need enablement.</td></tr>
+                    <tr><td><strong>WAU (Weekly Active Users)</strong></td><td>The count of unique users who performed at least one Copilot action in the most recent week.</td></tr>
+                </tbody>
+            </table>
+            `)}<!-- end Glossary -->
+
             <div style="text-align: center; margin-top: 2rem;">
                 <button class="btn-primary" onclick="location.reload()">Analyze Another File</button>
                 <button class="btn-secondary" onclick="window.print()">Print Report</button>

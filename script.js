@@ -763,7 +763,8 @@ function buildProjectionTables(metrics, sortedTeams) {
             <h2>Usage Tier Value Distribution</h2>
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
                 ${uploadedData.groupLabel || 'Teams'} segmented into performance tiers by Copilot actions per user.
-                Investment at $${licenseCost}/user/month.
+                Investment at $${licenseCost}/user/month.<br>
+                <a href="https://jordankingisalive.github.io/CopilotROICalculator/Start%20Here.html" target="_blank" style="color: var(--copilot-cyan); font-weight: 600; text-decoration: none;">🚀 Explore the Adoption Journey to move users up tiers →</a>
             </p>
             <table>
                 <thead>

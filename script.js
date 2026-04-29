@@ -519,7 +519,11 @@ function flattenData(rows) {
 
             orgWeeklyData[orgName] = rowsWithDates.map(item => ({
                 date: item.date,
-                actionsPerUser: parseNumber(item.row[mapping.totalActions] || 0)
+                actionsPerUser: parseNumber(item.row[mapping.totalActions] || 0),
+                activePercent: parseNumber(item.row[mapping.activeUsersPercent] || 0),
+                powerPercent: parseNumber(item.row[mapping.powerUsers] || 0),
+                activeDays: parseNumber(item.row[mapping.engagement] || 0),
+                enabled: parseNumber(item.row[mapping.enabledUsers] || 0)
             }));
 
             // Build an averaged row across all weeks instead of just using the latest
@@ -615,7 +619,7 @@ function flattenData(rows) {
     console.log(`Detected ${detectedWeeks} weeks of data (${sortedDateStrings.length} snapshots, span: ${sortedDateStrings[0]} to ${sortedDateStrings[sortedDateStrings.length - 1]})`);
     const dateRange = sortedDateStrings.length >= 2 ? `${sortedDateStrings[0]} to ${sortedDateStrings[sortedDateStrings.length - 1]}` : '';
 
-    return { rows: flattenedData, mapping, weeklyData: orgWeeklyData, groupLabel, detectedWeeks, dateRange };
+    return { rows: flattenedData, mapping, weeklyData: orgWeeklyData, groupLabel, detectedWeeks, dateRange, sortedDates: sortedDateStrings };
 }
 
 // Parse number from string (handles percentages, commas, etc.)
@@ -726,7 +730,7 @@ function computeTeamsForPeriod(period) {
 
         // Filter to matching dates
         const filtered = weeklyData.filter(w => {
-            const key = w.date instanceof Date ? w.date.toISOString().slice(0, 10) : '';
+            const key = w.date instanceof Date ? w.date.toISOString().slice(0, 10) : (typeof w.date === 'string' ? w.date.slice(0, 10) : '');
             return dateSet.has(key);
         });
 

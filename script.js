@@ -840,58 +840,123 @@ function buildProjectionTables(metrics, sortedTeams) {
         </div>`;
 
     // ---- UNLICENSED USER OPPORTUNITY COST ----
-    // Average monthly productivity value per active licensed user
     const avgValuePerActiveUser = activeUsers > 0 ? metrics.valuePerMonth / activeUsers : 0;
-    // Unlicensed users assumed to use Copilot at 10% of licensed user average
     const unlicensedUsageFactor = 0.10;
-    const valuePer100Unlicensed = avgValuePerActiveUser * unlicensedUsageFactor * 100;
-    const costPer100Licenses = licenseCost * 100;
-    const netOpportunityCostPer100 = valuePer100Unlicensed - costPer100Licenses;
-
     const unlicensedActionsPerMonth = avgMonthly * unlicensedUsageFactor;
-
-    const unlicensedScenarios = [100, 250, 500, 1000, 2500, 5000];
-    let unlicensedRows = '';
-    unlicensedScenarios.forEach(count => {
-        const totalActions = unlicensedActionsPerMonth * count;
-        const potentialValue = avgValuePerActiveUser * unlicensedUsageFactor * count;
-        const licensingCost = licenseCost * count;
-        const netGain = potentialValue - licensingCost;
-        const annualOpportunityCost = netGain * 12;
-        unlicensedRows += `<tr>
-            <td>${count.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-            <td>${totalActions.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td>$${licensingCost.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-            <td>$${potentialValue.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-            <td style="color: ${netGain >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${netGain.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-            <td style="color: ${annualOpportunityCost >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${annualOpportunityCost.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-        </tr>`;
-    });
+    const valuePerUnlicensedUser = avgValuePerActiveUser * unlicensedUsageFactor;
 
     const opportunityHtml = `
         <div class="roi-table-container">
             <h2>Unlicensed User Opportunity Cost</h2>
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
                 Estimated productivity left on the table for employees without a Copilot license.<br>
-                Assumes unlicensed users would adopt at <strong>10%</strong> of the current licensed-user average
-                (~<strong>${unlicensedActionsPerMonth.toFixed(0)} actions/user/mo</strong>, worth <strong>$${(avgValuePerActiveUser * unlicensedUsageFactor).toFixed(0)}</strong>/user/mo).
+                Assumes unlicensed users would adopt at <strong>10%</strong> of the current licensed-user average.
             </p>
-            <table>
-                <thead>
-                    <tr><th>Unlicensed Users</th><th>Actions/Mo</th><th>Licensing Cost/Mo</th><th>Potential Value/Mo</th><th>Net Gain/Mo</th><th>Annual Opportunity</th></tr>
-                </thead>
-                <tbody>${unlicensedRows}</tbody>
-            </table>
-            <div class="info-box" style="margin-top:1rem;">
+
+            <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 1.5rem;">
+                <label style="font-size: 0.9rem; color: var(--text-secondary);">Show as:</label>
+                <div style="display: inline-flex; border-radius: 8px; overflow: hidden; border: 1px solid var(--border);">
+                    <button id="opp-view-value" onclick="setOppView('value')" style="padding: 6px 16px; font-size: 0.85rem; border: none; cursor: pointer; background: var(--copilot-blue); color: white; font-weight: 600;">Dollar Value</button>
+                    <button id="opp-view-actions" onclick="setOppView('actions')" style="padding: 6px 16px; font-size: 0.85rem; border: none; cursor: pointer; background: var(--surface); color: var(--text-secondary);">Monthly Actions</button>
+                </div>
+            </div>
+
+            <div style="max-width: 600px; margin: 0 auto 2rem;">
+                <label style="display: block; text-align: center; font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Unlicensed Seat Count</label>
+                <input type="range" id="opp-slider" min="100" max="10000" step="100" value="1000"
+                    style="width: 100%; accent-color: var(--copilot-blue);"
+                    oninput="updateOppCost()">
+                <div style="display: flex; justify-content: space-between; margin-top: 0.25rem;">
+                    <small style="color: var(--text-secondary);">100</small>
+                    <strong id="opp-slider-label" style="font-size: 1.1rem; color: var(--copilot-cyan);">1,000 users</strong>
+                    <small style="color: var(--text-secondary);">10,000</small>
+                </div>
+            </div>
+
+            <div class="metrics-grid" id="opp-metrics">
+                <div class="metric-card">
+                    <div class="metric-label">Licensing Cost / Mo</div>
+                    <div class="metric-value" id="opp-licensing-cost">—</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label" id="opp-value-label">Potential Value / Mo</div>
+                    <div class="metric-value" id="opp-potential-value">—</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Net Gain / Mo</div>
+                    <div class="metric-value" id="opp-net-gain">—</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Annual Opportunity</div>
+                    <div class="metric-value" id="opp-annual">—</div>
+                </div>
+            </div>
+
+            <div class="info-box" style="margin-top:1.5rem;">
                 <p><strong>How is this calculated?</strong><br>
-                Your current licensed users generate an average of <strong>$${avgValuePerActiveUser.toFixed(0)}/user/month</strong> in productivity value.
-                Unlicensed users are conservatively estimated at <strong>10% of that rate</strong> ($${(avgValuePerActiveUser * unlicensedUsageFactor).toFixed(0)}/user/month),
-                reflecting minimal initial adoption with no training or enablement.
-                Even at this conservative level, the productivity gained can exceed the licensing cost — representing a clear opportunity cost of <em>not</em> licensing these users.</p>
+                Your current licensed users average <strong>${avgMonthly.toFixed(0)} actions/user/month</strong> worth <strong>$${avgValuePerActiveUser.toFixed(0)}/user/month</strong>.
+                Unlicensed users are conservatively estimated at <strong>10% of that rate</strong>
+                (~${unlicensedActionsPerMonth.toFixed(0)} actions/user/month, worth $${valuePerUnlicensedUser.toFixed(0)}/user/month),
+                reflecting minimal initial adoption with no training or enablement.</p>
             </div>
         </div>`;
 
+    // Store opportunity cost params globally so the slider/toggle can recalculate
+    window._oppParams = {
+        licenseCost: licenseCost,
+        valuePerUser: valuePerUnlicensedUser,
+        actionsPerUser: unlicensedActionsPerMonth,
+        avgMonthly: avgMonthly,
+        view: 'value'
+    };
+
+    // Initialize after render
+    setTimeout(() => { if (document.getElementById('opp-slider')) updateOppCost(); }, 50);
+
     return breakEvenHtml + tierHtml + opportunityHtml + projHtml;
+}
+
+// Opportunity cost slider update
+function updateOppCost() {
+    const p = window._oppParams;
+    if (!p) return;
+    const count = parseInt(document.getElementById('opp-slider').value);
+    const fmt = (n) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+    document.getElementById('opp-slider-label').textContent = fmt(count) + ' users';
+
+    const licensingCost = p.licenseCost * count;
+    const potentialValue = p.valuePerUser * count;
+    const netGain = potentialValue - licensingCost;
+    const annual = netGain * 12;
+    const totalActions = p.actionsPerUser * count;
+
+    if (p.view === 'value') {
+        document.getElementById('opp-licensing-cost').textContent = '$' + fmt(licensingCost);
+        document.getElementById('opp-value-label').textContent = 'Potential Value / Mo';
+        document.getElementById('opp-potential-value').textContent = '$' + fmt(potentialValue);
+        document.getElementById('opp-net-gain').textContent = '$' + fmt(netGain);
+        document.getElementById('opp-net-gain').style.color = netGain >= 0 ? 'var(--green)' : 'var(--red)';
+        document.getElementById('opp-annual').textContent = '$' + fmt(annual);
+        document.getElementById('opp-annual').style.color = annual >= 0 ? 'var(--green)' : 'var(--red)';
+    } else {
+        document.getElementById('opp-licensing-cost').textContent = '$' + fmt(licensingCost);
+        document.getElementById('opp-value-label').textContent = 'Total Actions / Mo';
+        document.getElementById('opp-potential-value').textContent = fmt(totalActions);
+        document.getElementById('opp-net-gain').textContent = fmt(p.actionsPerUser) + '/user';
+        document.getElementById('opp-net-gain').style.color = '';
+        document.getElementById('opp-annual').textContent = fmt(totalActions * 12) + '/yr';
+        document.getElementById('opp-annual').style.color = '';
+    }
+}
+
+function setOppView(view) {
+    window._oppParams.view = view;
+    document.getElementById('opp-view-value').style.background = view === 'value' ? 'var(--copilot-blue)' : 'var(--surface)';
+    document.getElementById('opp-view-value').style.color = view === 'value' ? 'white' : 'var(--text-secondary)';
+    document.getElementById('opp-view-actions').style.background = view === 'actions' ? 'var(--copilot-blue)' : 'var(--surface)';
+    document.getElementById('opp-view-actions').style.color = view === 'actions' ? 'white' : 'var(--text-secondary)';
+    updateOppCost();
 }
 
 // Render results page

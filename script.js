@@ -1,6 +1,8 @@
 // Global state
 let uploadedData = null;
 let resultsDisplayed = false;
+// Format number with max 2 decimal places
+const fmt2 = (n) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 let config = {
     licenseCost: 32,
     professionalRate: 78,
@@ -141,7 +143,7 @@ function showFilePreview(fileName, data) {
                     <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">${groupLabel}</div>
                 </div>
                 <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalUsers.toLocaleString()}</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                     <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Licensed Users</div>
                 </div>
                 <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
@@ -149,7 +151,7 @@ function showFilePreview(fileName, data) {
                     <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Activation</div>
                 </div>
                 <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalWeeklyActions.toLocaleString()}</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                     <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Weekly Actions</div>
                 </div>
             </div>
@@ -711,10 +713,10 @@ function buildProjectionTables(metrics, sortedTeams) {
 
         tierRows += `<tr>
             <td><span style="color:${tier.color}; font-weight:700;">${tier.name}</span></td>
-            <td>${tierUsers.toLocaleString()}</td>
+            <td>${tierUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
             <td>${tierMonthly.toFixed(0)}</td>
-            <td>$${tierInvestment.toLocaleString()}</td>
-            <td>$${tierMonthlyVal.toLocaleString()}</td>
+            <td>$${tierInvestment.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+            <td>$${tierMonthlyVal.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
             <td style="color: var(--green); font-weight: bold;">${tierRoi}x</td>
         </tr>`;
     });
@@ -723,10 +725,10 @@ function buildProjectionTables(metrics, sortedTeams) {
     const totalTierInvestment = activeUsers * licenseCost;
     tierRows += `<tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700;">
         <td>ALL USERS</td>
-        <td>${activeUsers.toLocaleString()}</td>
+        <td>${activeUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
         <td>${avgMonthly.toFixed(0)}</td>
-        <td>$${totalTierInvestment.toLocaleString()}</td>
-        <td>$${metrics.valuePerMonth.toLocaleString()}</td>
+        <td>$${totalTierInvestment.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+        <td>$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
         <td style="color: var(--green);">${metrics.roiMultiple.toFixed(1)}x</td>
     </tr>`;
 
@@ -755,18 +757,18 @@ function buildProjectionTables(metrics, sortedTeams) {
     let projRows = `
         <tr>
             <td><strong>Current deployment</strong></td>
-            <td>${totalUsers.toLocaleString()}</td>
-            <td>$${scaledMonthly.toLocaleString()}</td>
-            <td>$${scaledAnnual.toLocaleString()}</td>
-            <td>$${annualCost.toLocaleString()}</td>
+            <td>${totalUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+            <td>$${scaledMonthly.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+            <td>$${scaledAnnual.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+            <td>$${annualCost.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
             <td style="color: var(--green); font-weight: bold;">${metrics.roiMultiple.toFixed(1)}x</td>
         </tr>`;
 
     expansionMultiples.forEach(mult => {
         const expUsers = totalUsers * mult;
         const scenarios = [
-            { label: `${expUsers.toLocaleString()} users @ 50%`, factor: mult * 0.5 },
-            { label: `${expUsers.toLocaleString()} users @ 100%`, factor: mult },
+            { label: `${expUsers.toLocaleString(undefined, {maximumFractionDigits: 2})} users @ 50%`, factor: mult * 0.5 },
+            { label: `${expUsers.toLocaleString(undefined, {maximumFractionDigits: 2})} users @ 100%`, factor: mult },
         ];
         scenarios.forEach(s => {
             const mv = scaledMonthly * s.factor;
@@ -775,10 +777,10 @@ function buildProjectionTables(metrics, sortedTeams) {
             const roi = ac > 0 ? (av / ac).toFixed(1) : '0.0';
             projRows += `<tr>
                 <td>${s.label} adoption</td>
-                <td>${expUsers.toLocaleString()}</td>
-                <td>$${mv.toLocaleString()}</td>
-                <td>$${av.toLocaleString()}</td>
-                <td>$${ac.toLocaleString()}</td>
+                <td>${expUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+                <td>$${mv.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+                <td>$${av.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+                <td>$${ac.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
                 <td style="color: var(--green); font-weight: bold;">${roi}x</td>
             </tr>`;
         });
@@ -831,12 +833,12 @@ function buildProjectionTables(metrics, sortedTeams) {
         const netGain = potentialValue - licensingCost;
         const annualOpportunityCost = netGain * 12;
         unlicensedRows += `<tr>
-            <td>${count.toLocaleString()}</td>
+            <td>${count.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
             <td>${totalActions.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td>$${licensingCost.toLocaleString()}</td>
-            <td>$${potentialValue.toLocaleString()}</td>
-            <td style="color: ${netGain >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${netGain.toLocaleString()}</td>
-            <td style="color: ${annualOpportunityCost >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${annualOpportunityCost.toLocaleString()}</td>
+            <td>$${licensingCost.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+            <td>$${potentialValue.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+            <td style="color: ${netGain >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${netGain.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
+            <td style="color: ${annualOpportunityCost >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">$${annualOpportunityCost.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
         </tr>`;
     });
 
@@ -936,33 +938,33 @@ function renderResults() {
             <!-- Intelligent Recap Value Display -->
             <div class="recap-value-box" id="recapValueBoxData" style="background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); border: 2px solid var(--copilot-blue); border-radius: 12px; padding: 1.5rem; margin: 1rem 0; text-align: center;">
                 <h4 style="color: var(--copilot-blue); margin-bottom: 0.5rem; font-size: 0.95rem;">💡 Intelligent Recap Additional Value</h4>
-                <div class="value" style="font-size: 2rem; font-weight: bold; color: var(--dark-blue);">$${recapMonthlyValue.toLocaleString(0)}/mo</div>
-                <small>${config.intelligentRecapActions.toLocaleString()} actions × 0.5 hours each = ${recapHoursSaved.toLocaleString()} hours/mo</small>
+                <div class="value" style="font-size: 2rem; font-weight: bold; color: var(--dark-blue);">$${recapMonthlyValue.toLocaleString(undefined, {maximumFractionDigits: 2})}/mo</div>
+                <small>${config.intelligentRecapActions.toLocaleString(undefined, {maximumFractionDigits: 2})} actions × 0.5 hours each = ${recapHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 2})} hours/mo</small>
             </div>
             ` : ''}
 
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Enabled Users <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The total number of people in your organization who have been assigned a Microsoft 365 Copilot license.</span></span></span></div>
-                    <div class="metric-value">${metrics.totalEnabledUsers.toLocaleString()}</div>
+                    <div class="metric-value">${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                     <div class="metric-sublabel">Licensed for Copilot</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Activation Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">Of all the people who have a Copilot license, this is the percentage who actually used it at least once. For example, if 100 people have licenses and 60 used Copilot, the activation rate is 60%.</span></span></span></div>
                     <div class="metric-value">${metrics.activationRate.toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString()} active users</div>
+                    <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 2})} active users</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Weekly Actions per User <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.</span></span></span></div>
                     <div class="metric-value">${metrics.avgActionsPerUser.toFixed(1)}</div>
-                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString()} total/week</div>
+                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})} total/week</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Weekly Hours Saved <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">Estimated time saved per week across all users. Calculated by multiplying total weekly Copilot actions by the configured minutes saved per action, then converting to hours.</span></span></span></div>
-                    <div class="metric-value">${metrics.weeklyHoursSaved.toLocaleString(0)}</div>
+                    <div class="metric-value">${metrics.weeklyHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                     <div class="metric-sublabel">Conservative estimate</div>
                 </div>
             </div>
@@ -970,20 +972,20 @@ function renderResults() {
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div class="metric-label">WAU (Weekly Active Users)</div>
-                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString()}</div>
+                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                     <div class="metric-sublabel">${(metrics.totalActiveUsers / metrics.totalEnabledUsers * 100).toFixed(1)}% of licensed</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label">MAU (Monthly Active Users)</div>
-                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString()}</div>
+                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                     <div class="metric-sublabel">Based on ${config.analysisWeeks}-week rolling data</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label">Weekly Productivity Value</div>
                     <div class="metric-value">$${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString()} actions × ${config.minutesPerAction} min</div>
+                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})} actions × ${config.minutesPerAction} min</div>
                 </div>
 
                 <div class="metric-card">
@@ -1008,16 +1010,16 @@ function renderResults() {
                     <tbody>
                         <tr class="highlight-row">
                             <td><strong>${metrics.minsPerAction} minutes per action</strong><br><small>Configurable setting</small></td>
-                            <td>${metrics.hoursPerMonth.toLocaleString(0)} hrs</td>
+                            <td>${metrics.hoursPerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})} hrs</td>
                             <td id="dataMonthlyValue"
-                                data-without-recap="$${metrics.valuePerMonth.toLocaleString(0)}"
-                                data-with-recap="$${valuePerMonthWithRecap.toLocaleString(0)}">
-                                ${showRecap ? `$${valuePerMonthWithRecap.toLocaleString(0)}` : `$${metrics.valuePerMonth.toLocaleString(0)}`}
+                                data-without-recap="$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})}"
+                                data-with-recap="$${valuePerMonthWithRecap.toLocaleString(undefined, {maximumFractionDigits: 2})}">
+                                ${showRecap ? `$${valuePerMonthWithRecap.toLocaleString(undefined, {maximumFractionDigits: 2})}` : `$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})}`}
                             </td>
                             <td id="dataAnnualValue"
-                                data-without-recap="$${metrics.annualValue.toLocaleString(0)}"
-                                data-with-recap="$${annualValueWithRecap.toLocaleString(0)}">
-                                ${showRecap ? `$${annualValueWithRecap.toLocaleString(0)}` : `$${metrics.annualValue.toLocaleString(0)}`}
+                                data-without-recap="$${metrics.annualValue.toLocaleString(undefined, {maximumFractionDigits: 2})}"
+                                data-with-recap="$${annualValueWithRecap.toLocaleString(undefined, {maximumFractionDigits: 2})}">
+                                ${showRecap ? `$${annualValueWithRecap.toLocaleString(undefined, {maximumFractionDigits: 2})}` : `$${metrics.annualValue.toLocaleString(undefined, {maximumFractionDigits: 2})}`}
                             </td>
                             <td id="dataROIMultiple" style="color: var(--green); font-weight: bold;"
                                 data-without-recap="${metrics.roiMultiple.toFixed(1)}x"
@@ -1027,11 +1029,11 @@ function renderResults() {
                         </tr>
                         <tr>
                             <td colspan="5" style="background: var(--light-gray); padding: 1rem;">
-                                <strong>Investment:</strong> $${metrics.monthlyCost.toLocaleString(0)}/month
-                                ($${metrics.annualCost.toLocaleString(0)}/year) for ${metrics.totalEnabledUsers.toLocaleString()} licenses at $${config.licenseCost}/user/month<br>
+                                <strong>Investment:</strong> $${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 2})}/month
+                                ($${metrics.annualCost.toLocaleString(undefined, {maximumFractionDigits: 2})}/year) for ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 2})} licenses at $${config.licenseCost}/user/month<br>
                                 <strong>Professional Rate:</strong> $${config.professionalRate}/hour (fully-loaded cost)<br>
-                                <strong>Calculation:</strong> ${metrics.totalMonthlyActions.toLocaleString(0)} monthly actions × ${metrics.minsPerAction} min ÷ 60 × $${config.professionalRate}/hr = $${metrics.valuePerMonth.toLocaleString(0)}
-                                ${showRecap ? `<br><strong>Intelligent Recap:</strong> ${config.intelligentRecapActions.toLocaleString()} actions × 0.5 hrs × $${config.professionalRate}/hr = $${recapMonthlyValue.toLocaleString(0)}/mo` : ''}
+                                <strong>Calculation:</strong> ${metrics.totalMonthlyActions.toLocaleString(undefined, {maximumFractionDigits: 2})} monthly actions × ${metrics.minsPerAction} min ÷ 60 × $${config.professionalRate}/hr = $${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})}
+                                ${showRecap ? `<br><strong>Intelligent Recap:</strong> ${config.intelligentRecapActions.toLocaleString(undefined, {maximumFractionDigits: 2})} actions × 0.5 hrs × $${config.professionalRate}/hr = $${recapMonthlyValue.toLocaleString(undefined, {maximumFractionDigits: 2})}/mo` : ''}
                             </td>
                         </tr>
                     </tbody>
@@ -1045,7 +1047,7 @@ function renderResults() {
                         <div class="leaderboard-rank">${index + 1}</div>
                         <div class="leaderboard-name">${team.team}</div>
                         <div>
-                            <span class="leaderboard-value">$${team.monthlyValue.toLocaleString(0)}/mo</span>
+                            <span class="leaderboard-value">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 2})}/mo</span>
                             <span class="leaderboard-subvalue">${team.weeklyHours.toFixed(0)} hrs/week</span>
                         </div>
                     </div>
@@ -1092,13 +1094,13 @@ function renderResults() {
                             return `
                             <tr>
                                 <td data-value="${team.team}">${team.team}</td>
-                                <td data-value="${team.activeUsers}">${team.activeUsers.toLocaleString(0)}</td>
+                                <td data-value="${team.activeUsers}">${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
                                 <td data-value="${team.powerUsers}">${team.powerUsers} users</td>
-                                <td data-value="${team.weeklyActions}">${team.weeklyActions.toLocaleString(0)}</td>
+                                <td data-value="${team.weeklyActions}">${team.weeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
                                 <td data-value="${team.actionsPerUser}">${team.actionsPerUser.toFixed(1)}</td>
                                 <td data-value="${team.peakWeek ? team.peakWeek.getTime() : 0}">${peakWeekDisplay}</td>
                                 <td data-value="${team.weeklyHours}">${team.weeklyHours.toFixed(0)}</td>
-                                <td data-value="${team.monthlyValue}"><strong>$${team.monthlyValue.toLocaleString(0)}</strong></td>
+                                <td data-value="${team.monthlyValue}"><strong>$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 2})}</strong></td>
                             </tr>
                         `}).join('')}
                     </tbody>

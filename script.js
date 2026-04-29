@@ -1312,7 +1312,7 @@ function renderResults() {
     initTableSorting();
 }
 
-// Export results to a styled PDF — captures each section individually then stitches into a multi-page PDF
+// Export results to a styled PDF with smart pagination
 async function exportToPDF() {
     const container = document.querySelector('.results-container');
     if (!container) return;
@@ -1334,79 +1334,123 @@ async function exportToPDF() {
     container.style.width = '900px';
     container.style.maxWidth = '900px';
 
+    // Fix gradient-text rendering: html2canvas can't do background-clip:text,
+    // so swap to solid cyan color during capture
+    const gradientEls = container.querySelectorAll('.metric-value');
+    gradientEls.forEach(el => {
+        el.dataset.origCss = el.getAttribute('style') || '';
+        el.style.background = 'none';
+        el.style.webkitBackgroundClip = 'unset';
+        el.style.backgroundClip = 'unset';
+        el.style.webkitTextFillColor = '#00D4FF';
+        el.style.color = '#00D4FF';
+    });
+
     function cleanup() {
         container.setAttribute('style', origStyle);
         closedDetails.forEach(d => d.removeAttribute('open'));
         hideEls.forEach(el => { el.style.display = el.dataset.prevDisplay || ''; });
+        gradientEls.forEach(el => { el.setAttribute('style', el.dataset.origCss); });
         if (btn) { btn.textContent = origText; btn.disabled = false; }
     }
 
     try {
         if (!window.jspdf || !window.jspdf.jsPDF) {
-            throw new Error('PDF library failed to load. Please check your internet connection and refresh the page.');
+            throw new Error('PDF library failed to load. Refresh the page and try again.');
         }
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
-        const pageW = 210, pageH = 297, margin = 8;
-        const usableW = pageW - 2 * margin;
-        const usableH = pageH - 2 * margin;
-        let curY = margin;
-        let needsNewPage = false;
+        const PW = 210, PH = 297, M = 8, GAP = 2;
+        const UW = PW - 2 * M;
+        const UH = PH - 2 * M;
 
-        // Gather visible top-level children as sections to capture
-        const sections = Array.from(container.children).filter(el =>
-            el.offsetHeight > 0 && getComputedStyle(el).display !== 'none'
-        );
+        const h2cOpts = { scale: 1.5, useCORS: true, backgroundColor: '#0B1120', logging: false, windowWidth: 920 };
+        const capture = (el) => html2canvas(el, h2cOpts);
+        const mmH = (c) => (c.height * UW) / c.width;
+        const isVisible = (el) => el.offsetHeight > 0 && getComputedStyle(el).display !== 'none';
 
-        for (let i = 0; i < sections.length; i++) {
-            if (btn) btn.textContent = `Generating PDF… ${Math.round((i / sections.length) * 100)}%`;
+        // ── Phase 1: Build list of atomic blocks ──
+        // Break collapsible sections into their body's direct children so each
+        // block is small enough to fit on one page (except the big team table).
+        const targets = []; // { el, sectionStart }
+        const topChildren = Array.from(container.children).filter(isVisible);
 
-            const canvas = await html2canvas(sections[i], {
-                scale: 1.5,
-                useCORS: true,
-                backgroundColor: '#0B1120',
-                logging: false,
-                windowWidth: 920
-            });
-
-            const imgW = usableW;
-            const imgH = (canvas.height * imgW) / canvas.width;
-
-            if (imgH <= usableH) {
-                // Section fits on one page — check if there's room on the current page
-                if (needsNewPage || curY + imgH > pageH - margin) {
-                    pdf.addPage();
-                    curY = margin;
+        for (const child of topChildren) {
+            const isDetails = child.tagName === 'DETAILS';
+            if (isDetails) {
+                const summary = child.querySelector(':scope > summary');
+                const body = child.querySelector(':scope > .section-body');
+                if (summary && body) {
+                    targets.push({ el: summary, sectionStart: true });
+                    const subs = Array.from(body.children).filter(isVisible);
+                    subs.forEach(s => targets.push({ el: s, sectionStart: false }));
+                } else {
+                    targets.push({ el: child, sectionStart: true });
                 }
-                pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', margin, curY, imgW, imgH);
-                curY += imgH + 3;
-                needsNewPage = false;
             } else {
-                // Section taller than a page — slice it across multiple pages
-                const pxPerMm = canvas.width / imgW;
-                let srcY = 0;
-                while (srcY < canvas.height) {
-                    if (needsNewPage || curY >= pageH - margin) {
-                        pdf.addPage();
-                        curY = margin;
-                    }
-                    const remainMm = usableH - (curY - margin);
-                    const slicePx = Math.min(remainMm * pxPerMm, canvas.height - srcY);
-                    const sliceMm = slicePx / pxPerMm;
-
-                    const slice = document.createElement('canvas');
-                    slice.width = canvas.width;
-                    slice.height = Math.ceil(slicePx);
-                    slice.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, slicePx, 0, 0, canvas.width, slicePx);
-
-                    pdf.addImage(slice.toDataURL('image/jpeg', 0.85), 'JPEG', margin, curY, imgW, sliceMm);
-                    srcY += slicePx;
-                    curY += sliceMm;
-                    needsNewPage = (curY >= pageH - margin);
-                }
+                targets.push({ el: child, sectionStart: false });
             }
         }
 
+        // ── Phase 2: Capture all blocks as canvases ──
+        const blocks = [];
+        for (let i = 0; i < targets.length; i++) {
+            if (btn) btn.textContent = `Generating PDF… ${Math.round((i / targets.length) * 85)}%`;
+            const canvas = await capture(targets[i].el);
+            blocks.push({ canvas, h: mmH(canvas), sectionStart: targets[i].sectionStart });
+        }
+
+        // ── Phase 3: Smart pagination ──
+        if (btn) btn.textContent = 'Generating PDF… 90%';
+        let y = M;
+
+        function addPage() { pdf.addPage(); y = M; }
+
+        function placeBlock(canvas, h) {
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.90), 'JPEG', M, y, UW, h);
+            y += h + GAP;
+        }
+
+        function sliceBlock(canvas) {
+            // For content taller than a full page, slice it across pages
+            const pxPerMm = canvas.width / UW;
+            let srcY = 0;
+            while (srcY < canvas.height) {
+                if (y >= PH - M) addPage();
+                const availMm = (PH - M) - y;
+                const slicePx = Math.min(availMm * pxPerMm, canvas.height - srcY);
+                const sliceMm = slicePx / pxPerMm;
+                const slice = document.createElement('canvas');
+                slice.width = canvas.width;
+                slice.height = Math.ceil(slicePx);
+                slice.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, slicePx, 0, 0, canvas.width, slicePx);
+                pdf.addImage(slice.toDataURL('image/jpeg', 0.90), 'JPEG', M, y, UW, sliceMm);
+                srcY += slicePx;
+                y += sliceMm;
+            }
+        }
+
+        for (let i = 0; i < blocks.length; i++) {
+            const blk = blocks[i];
+
+            // For section titles: start a new page if less than 20% of the page remains
+            if (blk.sectionStart && y > M + UH * 0.8) {
+                addPage();
+            }
+
+            if (blk.h <= UH) {
+                // Block fits on one page — never split it
+                if (y + blk.h > PH - M) addPage();
+                placeBlock(blk.canvas, blk.h);
+            } else {
+                // Block taller than a full page (e.g. the big team table) — slice it
+                if (y > M + 1) addPage();
+                sliceBlock(blk.canvas);
+                y += GAP;
+            }
+        }
+
+        if (btn) btn.textContent = 'Generating PDF… 100%';
         pdf.save('Copilot_ROI_Analysis.pdf');
     } catch (err) {
         console.error('PDF export failed:', err);

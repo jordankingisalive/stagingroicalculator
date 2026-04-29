@@ -1312,68 +1312,105 @@ function renderResults() {
     initTableSorting();
 }
 
-// Export results to a styled PDF preserving the page's visual appearance
-function exportToPDF() {
+// Export results to a styled PDF — captures each section individually then stitches into a multi-page PDF
+async function exportToPDF() {
     const container = document.querySelector('.results-container');
     if (!container) return;
 
     const btn = document.querySelector('[onclick="exportToPDF()"]');
     const origText = btn ? btn.textContent : '';
-    if (btn) { btn.textContent = 'Generating PDF…'; btn.disabled = true; }
+    if (btn) { btn.textContent = 'Generating PDF… 0%'; btn.disabled = true; }
 
-    function resetBtn() {
-        if (btn) { btn.textContent = origText; btn.disabled = false; }
-    }
-
-    // Open all collapsed <details> sections so content is visible in the capture
+    // Open all collapsed <details> so content is captured
     const closedDetails = container.querySelectorAll('details:not([open])');
     closedDetails.forEach(d => d.setAttribute('open', ''));
 
-    // Hide buttons during capture
-    const buttons = container.querySelectorAll('button, .toggle-switch, input[type="range"]');
-    buttons.forEach(el => el.dataset.prevDisplay = el.style.display);
-    buttons.forEach(el => { el.style.display = 'none'; });
+    // Hide interactive elements
+    const hideEls = container.querySelectorAll('button, .toggle-switch, input[type="range"]');
+    hideEls.forEach(el => { el.dataset.prevDisplay = el.style.display; el.style.display = 'none'; });
 
-    // Temporarily constrain width so html2canvas doesn't choke on a giant canvas
-    const origWidth = container.style.width;
-    const origMaxWidth = container.style.maxWidth;
+    // Constrain width for consistent rendering
+    const origStyle = container.getAttribute('style') || '';
     container.style.width = '900px';
     container.style.maxWidth = '900px';
 
-    const opt = {
-        margin:       [8, 6, 8, 6],
-        filename:     'Copilot_ROI_Analysis.pdf',
-        image:        { type: 'jpeg', quality: 0.85 },
-        html2canvas:  { scale: 1.5, useCORS: true, backgroundColor: '#0B1120',
-                        scrollY: -window.scrollY, windowWidth: 920,
-                        logging: false, removeContainer: true },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['css', 'legacy'], avoid: ['.collapsible-section', 'tr'] }
-    };
-
     function cleanup() {
-        container.style.width = origWidth;
-        container.style.maxWidth = origMaxWidth;
+        container.setAttribute('style', origStyle);
         closedDetails.forEach(d => d.removeAttribute('open'));
-        buttons.forEach(el => { el.style.display = el.dataset.prevDisplay || ''; });
-        resetBtn();
+        hideEls.forEach(el => { el.style.display = el.dataset.prevDisplay || ''; });
+        if (btn) { btn.textContent = origText; btn.disabled = false; }
     }
 
-    // Safety timeout — if html2pdf hangs, restore UI after 45s
-    const safetyTimer = setTimeout(() => {
-        cleanup();
-        alert('PDF generation timed out. Try collapsing some sections and retrying.');
-    }, 45000);
+    try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageW = 210, pageH = 297, margin = 8;
+        const usableW = pageW - 2 * margin;
+        const usableH = pageH - 2 * margin;
+        let curY = margin;
+        let needsNewPage = false;
 
-    html2pdf().set(opt).from(container).save().then(() => {
-        clearTimeout(safetyTimer);
-        cleanup();
-    }).catch((err) => {
-        clearTimeout(safetyTimer);
-        cleanup();
+        // Gather visible top-level children as sections to capture
+        const sections = Array.from(container.children).filter(el =>
+            el.offsetHeight > 0 && getComputedStyle(el).display !== 'none'
+        );
+
+        for (let i = 0; i < sections.length; i++) {
+            if (btn) btn.textContent = `Generating PDF… ${Math.round((i / sections.length) * 100)}%`;
+
+            const canvas = await html2canvas(sections[i], {
+                scale: 1.5,
+                useCORS: true,
+                backgroundColor: '#0B1120',
+                logging: false,
+                windowWidth: 920
+            });
+
+            const imgW = usableW;
+            const imgH = (canvas.height * imgW) / canvas.width;
+
+            if (imgH <= usableH) {
+                // Section fits on one page — check if there's room on the current page
+                if (needsNewPage || curY + imgH > pageH - margin) {
+                    pdf.addPage();
+                    curY = margin;
+                }
+                pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', margin, curY, imgW, imgH);
+                curY += imgH + 3;
+                needsNewPage = false;
+            } else {
+                // Section taller than a page — slice it across multiple pages
+                const pxPerMm = canvas.width / imgW;
+                let srcY = 0;
+                while (srcY < canvas.height) {
+                    if (needsNewPage || curY >= pageH - margin) {
+                        pdf.addPage();
+                        curY = margin;
+                    }
+                    const remainMm = usableH - (curY - margin);
+                    const slicePx = Math.min(remainMm * pxPerMm, canvas.height - srcY);
+                    const sliceMm = slicePx / pxPerMm;
+
+                    const slice = document.createElement('canvas');
+                    slice.width = canvas.width;
+                    slice.height = Math.ceil(slicePx);
+                    slice.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, slicePx, 0, 0, canvas.width, slicePx);
+
+                    pdf.addImage(slice.toDataURL('image/jpeg', 0.85), 'JPEG', margin, curY, imgW, sliceMm);
+                    srcY += slicePx;
+                    curY += sliceMm;
+                    needsNewPage = (curY >= pageH - margin);
+                }
+            }
+        }
+
+        pdf.save('Copilot_ROI_Analysis.pdf');
+    } catch (err) {
         console.error('PDF export failed:', err);
-        alert('PDF export failed. Please try again.');
-    });
+        alert('PDF export failed: ' + err.message);
+    } finally {
+        cleanup();
+    }
 }
 
 // Initialize table sorting functionality

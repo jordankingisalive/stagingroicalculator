@@ -1186,7 +1186,7 @@ function renderResults() {
                 <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
                 <table>
                     <thead>
-                        <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users</th><th>Avg Days/Wk</th><th>Super Users</th><th>Actions/User</th><th>Monthly Value</th><th>Hrs/Week</th></tr>
+                        <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users</th><th>Super Users</th><th>Actions/User</th><th>Monthly Value</th><th>Hrs/Week</th></tr>
                     </thead>
                     <tbody>
                         ${sortedTeams.slice(0, 10).map((team, index) => `
@@ -1194,7 +1194,6 @@ function renderResults() {
                             <td style="color: var(--copilot-cyan); font-weight: 700; font-size: 1.1rem;">${index + 1}</td>
                             <td style="font-weight: 600;">${team.team}</td>
                             <td>${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-                            <td>${team.engagement.toFixed(1)}</td>
                             <td>${team.powerUsers}</td>
                             <td>${team.actionsPerUser.toFixed(1)}</td>
                             <td style="color: var(--green); font-weight: 700;">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>

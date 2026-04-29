@@ -1101,73 +1101,58 @@ function toggleRecapDisplay() {
     });
 }
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script>
-        function exportToPDF() {
-            const source = document.querySelector('.container');
-            const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'position:absolute;left:-9999px;top:0;width:1100px;background:#fff;color:#1a1a1a;font-family:Segoe UI,sans-serif;line-height:1.6;padding:2rem;';
-            const clone = source.cloneNode(true);
+        async function exportToPDF() {
+            const btn = event.target;
+            const origText = btn.textContent;
+            btn.textContent = 'Generating...';
+            btn.disabled = true;
 
-            clone.querySelectorAll('details').forEach(d => d.setAttribute('open', ''));
+            try {
+                const details = document.querySelectorAll('details:not([open])');
+                details.forEach(d => d.setAttribute('open', ''));
+                await new Promise(r => setTimeout(r, 300));
 
-            clone.querySelectorAll('*').forEach(el => {
-                el.style.backgroundColor = '';
-                el.style.backgroundImage = 'none';
-                el.style.boxShadow = 'none';
-                el.style.color = '#1a1a1a';
-                el.style.webkitTextFillColor = '#1a1a1a';
-                el.style.borderColor = '#d0d0d0';
-
-                const tag = el.tagName;
-                if (/^H[1-5]$/.test(tag)) {
-                    el.style.color = '#1a3a6b';
-                    el.style.webkitTextFillColor = '#1a3a6b';
-                    el.style.background = 'none';
-                    el.style.webkitBackgroundClip = 'unset';
-                    el.style.backgroundClip = 'unset';
-                }
-                if (tag === 'A') {
-                    el.style.color = '#2563eb';
-                    el.style.webkitTextFillColor = '#2563eb';
-                }
-                if (tag === 'TH') {
-                    el.style.backgroundColor = '#f0f4f8';
-                    el.style.color = '#1a3a6b';
-                    el.style.webkitTextFillColor = '#1a3a6b';
-                }
-            });
-
-            wrapper.appendChild(clone);
-            document.body.appendChild(wrapper);
-
-            const opt = {
-                margin: [0.4, 0.4, 0.6, 0.4],
-                filename: 'M365_Copilot_ROI_Projections.pdf',
-                image: { type: 'jpeg', quality: 0.95 },
-                html2canvas: {
+                const element = document.querySelector('.container');
+                const canvas = await html2canvas(element, {
                     scale: 2,
                     useCORS: true,
                     logging: false,
-                    backgroundColor: '#ffffff',
-                    width: 1100
-                },
-                jsPDF: {
-                    unit: 'in',
-                    format: 'letter',
-                    orientation: 'portrait'
-                },
-                pagebreak: {
-                    mode: ['css', 'legacy'],
-                    avoid: ['tr', '.phase-card', '.month-card', '.insight-card', '.scenario-card', '.metric-card', 'img']
-                }
-            };
+                    backgroundColor: null
+                });
 
-            html2pdf().set(opt).from(clone).save().then(() => {
-                document.body.removeChild(wrapper);
-            }).catch(() => {
-                document.body.removeChild(wrapper);
-            });
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'in', 'letter');
+
+                const pageW = 8.5;
+                const pageH = 11;
+                const margin = 0.35;
+                const usableW = pageW - margin * 2;
+                const usableH = pageH - margin * 2;
+
+                const imgW = usableW;
+                const imgH = (canvas.height / canvas.width) * imgW;
+
+                let y = 0;
+                let page = 0;
+                while (y < imgH) {
+                    if (page > 0) pdf.addPage();
+                    pdf.addImage(imgData, 'JPEG', margin, margin - y, imgW, imgH);
+                    y += usableH;
+                    page++;
+                }
+
+                pdf.save('M365_Copilot_ROI_Projections.pdf');
+            } catch (err) {
+                console.error('PDF export failed:', err);
+                alert('PDF export failed. Please try Print Report instead.');
+            } finally {
+                btn.textContent = origText;
+                btn.disabled = false;
+            }
         }
 
         function emailReport() {

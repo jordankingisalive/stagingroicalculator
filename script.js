@@ -420,14 +420,20 @@ function flattenData(rows) {
                 const monthlyActions = weeklyActions * 4.33;
                 const powerUsersCount = Math.round((activeUsers * powerUsersPercent) / 100);
 
-                // Build weekly history for this org (for peak week calculation)
+                // Build weekly history for this org (for peak week calculation AND time-period toggle)
                 orgWeeklyData[orgName] = sortedDates
                     .map(date => {
                         const cols = dateMetricMap[date];
-                        const actions = parseNumber(row[cols['Avg Copilot Actions']] || 0);
-                        return { date: parseDate(date), actionsPerUser: actions };
+                        return {
+                            date: parseDate(date),
+                            actionsPerUser: parseNumber(row[cols['Avg Copilot Actions']] || 0),
+                            activePercent: parseNumber(row[cols['% Active Users']] || 0),
+                            powerPercent: parseNumber(row[cols['% Power Users']] || 0),
+                            activeDays: parseNumber(row[cols['Avg Active Days']] || 0),
+                            enabled: parseNumber(row[cols['Enabled Users']] || 0)
+                        };
                     })
-                    .filter(w => w.date !== null && w.actionsPerUser > 0);
+                    .filter(w => w.date !== null && w.enabled > 0);
 
                 return {
                     team: orgName,
@@ -452,7 +458,7 @@ function flattenData(rows) {
         }
         console.log(`Parsed ${flattenedData.length} organizations from wide format (${detectedWeeks} weeks)`);
         const dateRange = sortedDates.length >= 2 ? `${sortedDates[0]} to ${sortedDates[sortedDates.length - 1]}` : '';
-        return { rows: flattenedData, mapping: {}, weeklyData: orgWeeklyData, groupLabel, detectedWeeks, dateRange };
+        return { rows: flattenedData, mapping: {}, weeklyData: orgWeeklyData, groupLabel, detectedWeeks, dateRange, sortedDates };
     }
 
     // --- LONG FORMAT fallback ---
@@ -677,6 +683,208 @@ function calculateMetrics(data) {
     };
 }
 
+// ---- TIME-PERIOD TOGGLE LOGIC ----
+// Recalculate team-level aggregates for a specific time window
+function computeTeamsForPeriod(period) {
+    if (!uploadedData || !uploadedData.weeklyData || !uploadedData.sortedDates) return null;
+    const allDates = uploadedData.sortedDates;
+    if (!allDates || allDates.length === 0) return null;
+
+    // Determine which date indices to include
+    let dateSlice;
+    const total = allDates.length;
+    switch (period) {
+        case 'last4':
+            dateSlice = allDates.slice(-4);
+            break;
+        case 'last13':
+            dateSlice = allDates.slice(-13);
+            break;
+        case '3moAgo':
+            // Weeks from before the last 13 weeks (i.e. everything prior to 3 months ago)
+            dateSlice = allDates.slice(0, Math.max(1, total - 13));
+            break;
+        case 'first4':
+            dateSlice = allDates.slice(0, 4);
+            break;
+        case 'all':
+        default:
+            dateSlice = allDates;
+            break;
+    }
+
+    // Convert to a Set of ISO date strings for quick lookup
+    const dateSet = new Set(dateSlice.map(d => typeof d === 'string' ? d : d.toISOString().slice(0, 10)));
+
+    const rate = config.professionalRate;
+    const mpa = config.minutesPerAction;
+    const rows = uploadedData.rows;
+
+    const recomputed = rows.map(row => {
+        const weeklyData = uploadedData.weeklyData[row.team];
+        if (!weeklyData || weeklyData.length === 0) return { ...row, monthlyValue: 0, weeklyHours: 0 };
+
+        // Filter to matching dates
+        const filtered = weeklyData.filter(w => {
+            const key = w.date instanceof Date ? w.date.toISOString().slice(0, 10) : '';
+            return dateSet.has(key);
+        });
+
+        if (filtered.length === 0) return null;
+
+        const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        const enabledUsers = filtered[filtered.length - 1].enabled || row.enabledUsers;
+        const activePercent = avg(filtered.map(w => w.activePercent).filter(v => v > 0));
+        const actionsPerUser = avg(filtered.map(w => w.actionsPerUser).filter(v => v > 0));
+        const powerPercent = avg(filtered.map(w => w.powerPercent).filter(v => v > 0));
+
+        const activeUsers = Math.round((enabledUsers * activePercent) / 100);
+        const weeklyActions = actionsPerUser * activeUsers;
+        const monthlyActions = weeklyActions * 4.33;
+        const powerUsersCount = Math.round((activeUsers * powerPercent) / 100);
+        const monthlyValue = (monthlyActions * mpa / 60) * rate;
+        const weeklyHours = (weeklyActions * mpa / 60);
+
+        // Peak week within this time slice
+        let peakWeek = null;
+        let peakActionsPerUser = actionsPerUser;
+        if (filtered.length > 0) {
+            const peak = filtered.reduce((max, w) => w.actionsPerUser > max.actionsPerUser ? w : max, filtered[0]);
+            peakWeek = peak.date;
+            peakActionsPerUser = peak.actionsPerUser;
+        }
+
+        return {
+            ...row,
+            enabledUsers,
+            activeUsers,
+            weeklyActions,
+            monthlyActions,
+            actionsPerUser,
+            powerUsers: powerUsersCount,
+            monthlyValue,
+            weeklyHours,
+            peakWeek,
+            peakActionsPerUser
+        };
+    }).filter(r => r !== null && (r.enabledUsers > 0 || r.activeUsers > 0));
+
+    return recomputed.sort((a, b) => b.monthlyValue - a.monthlyValue);
+}
+
+// Labels for time period toggle buttons
+const periodLabels = {
+    last4: 'Last 4 Weeks',
+    last13: 'Last 3 Months',
+    '3moAgo': '3+ Months Ago',
+    all: 'Entire Period',
+    first4: 'First Month'
+};
+
+// Re-render the tier table and leaderboard for a selected time period
+function switchTimePeriod(period) {
+    const teams = computeTeamsForPeriod(period);
+    if (!teams) return;
+
+    // Update active button state
+    document.querySelectorAll('.time-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.period === period);
+    });
+
+    const rate = config.professionalRate;
+    const mpa = config.minutesPerAction;
+    const licenseCost = config.licenseCost;
+
+    // --- Rebuild tier table body ---
+    const byActions = [...teams].sort((a, b) => b.actionsPerUser - a.actionsPerUser);
+    const totalTeams = byActions.length;
+    const tierDefs = [
+        { name: 'Top 10%',    color: 'var(--green)',          start: 0,                                    end: Math.max(1, Math.round(totalTeams * 0.10)) },
+        { name: '75-90%',     color: 'var(--copilot-cyan)',   start: Math.max(1, Math.round(totalTeams * 0.10)), end: Math.round(totalTeams * 0.25) },
+        { name: '50-75%',     color: 'var(--copilot-blue)',   start: Math.round(totalTeams * 0.25),        end: Math.round(totalTeams * 0.50) },
+        { name: '25-50%',     color: 'var(--copilot-orange)', start: Math.round(totalTeams * 0.50),        end: Math.round(totalTeams * 0.75) },
+        { name: 'Bottom 25%', color: 'var(--red)',            start: Math.round(totalTeams * 0.75),        end: totalTeams },
+    ];
+
+    let tierRows = '';
+    let totalActiveInTiers = 0;
+    let totalValueInTiers = 0;
+    tierDefs.forEach(tier => {
+        const slice = byActions.slice(tier.start, tier.end);
+        if (slice.length === 0) return;
+        const tierUsers = slice.reduce((s, t) => s + t.activeUsers, 0);
+        const tierWeekly = slice.reduce((s, t) => s + t.weeklyActions, 0);
+        const tierAvgWeekly = tierUsers > 0 ? tierWeekly / tierUsers : 0;
+        const tierMonthly = tierAvgWeekly * 4.33;
+        const tierMonthlyVal = slice.reduce((s, t) => s + t.monthlyValue, 0);
+        const tierInvestment = tierUsers * licenseCost;
+        const tierRoi = tierInvestment > 0 ? (tierMonthlyVal / tierInvestment).toFixed(1) : '0.0';
+        totalActiveInTiers += tierUsers;
+        totalValueInTiers += tierMonthlyVal;
+        tierRows += `<tr>
+            <td><span style="color:${tier.color}; font-weight:700;">${tier.name}</span></td>
+            <td>${tierUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>${tierMonthly.toFixed(0)}</td>
+            <td>$${tierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>$${tierMonthlyVal.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td style="color: var(--green); font-weight: bold;">${tierRoi}x</td>
+        </tr>`;
+    });
+    const totalTierInvestment = totalActiveInTiers * licenseCost;
+    const allRoi = totalTierInvestment > 0 ? (totalValueInTiers / totalTierInvestment).toFixed(1) : '0.0';
+    tierRows += `<tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700;">
+        <td>ALL USERS</td>
+        <td>${totalActiveInTiers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+        <td>${totalActiveInTiers > 0 ? (teams.reduce((s,t) => s + t.monthlyActions, 0) / totalActiveInTiers).toFixed(0) : '0'}</td>
+        <td>$${totalTierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+        <td>$${totalValueInTiers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+        <td style="color: var(--green);">${allRoi}x</td>
+    </tr>`;
+
+    const tierBody = document.getElementById('tierTableBody');
+    if (tierBody) tierBody.innerHTML = tierRows;
+
+    // Update tier period label
+    const tierLabel = document.getElementById('tierPeriodLabel');
+    if (tierLabel) tierLabel.textContent = periodLabels[period];
+
+    // --- Rebuild leaderboard top 10 ---
+    const top10Body = document.getElementById('top10Body');
+    if (top10Body) {
+        top10Body.innerHTML = teams.slice(0, 10).map((team, index) => `
+            <tr>
+                <td style="color: var(--copilot-cyan); font-weight: 700; font-size: 1.1rem;">${index + 1}</td>
+                <td style="font-weight: 600;">${team.team}</td>
+                <td>${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                <td>${team.powerUsers}</td>
+                <td>${team.actionsPerUser.toFixed(1)}</td>
+                <td style="color: var(--green); font-weight: 700;">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                <td>${team.weeklyHours.toFixed(0)}</td>
+            </tr>`).join('');
+    }
+
+    // --- Rebuild full leaderboard ---
+    const fullBody = document.getElementById('teamsTableBody');
+    if (fullBody) {
+        fullBody.innerHTML = teams.map(team => {
+            const peakWeekDisplay = team.peakWeek
+                ? `${(team.peakWeek.getMonth() + 1).toString().padStart(2, '0')}/${team.peakWeek.getDate().toString().padStart(2, '0')}/${team.peakWeek.getFullYear()} (${team.peakActionsPerUser.toFixed(1)})`
+                : 'N/A';
+            return `
+            <tr>
+                <td data-value="${team.team}">${team.team}</td>
+                <td data-value="${team.activeUsers}">${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                <td data-value="${team.powerUsers}">${team.powerUsers}</td>
+                <td data-value="${team.weeklyActions}">${team.weeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                <td data-value="${team.actionsPerUser}">${team.actionsPerUser.toFixed(1)}</td>
+                <td data-value="${team.peakWeek ? team.peakWeek.getTime() : 0}">${peakWeekDisplay}</td>
+                <td data-value="${team.weeklyHours}">${team.weeklyHours.toFixed(0)}</td>
+                <td data-value="${team.monthlyValue}"><strong>$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong></td>
+            </tr>`;
+        }).join('');
+    }
+}
+
 // Build ROI projection tables (break-even, tiers, 3-year projections)
 function buildProjectionTables(metrics, sortedTeams) {
     const rate = config.professionalRate;
@@ -805,11 +1013,19 @@ function buildProjectionTables(metrics, sortedTeams) {
                 Investment at $${licenseCost}/user/month.<br>
                 <a href="https://jordankingisalive.github.io/CopilotROICalculator/Start%20Here.html" target="_blank" style="color: var(--copilot-cyan); font-weight: 600; text-decoration: none;">🚀 Explore the Adoption Journey to move users up tiers →</a>
             </p>
+            ${uploadedData.sortedDates && uploadedData.sortedDates.length > 4 ? `<div class="time-toggle-bar" style="display:flex; justify-content:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+                <button class="time-toggle-btn active" data-period="all" onclick="switchTimePeriod('all')">Entire Period</button>
+                <button class="time-toggle-btn" data-period="last4" onclick="switchTimePeriod('last4')">Last 4 Weeks</button>
+                <button class="time-toggle-btn" data-period="last13" onclick="switchTimePeriod('last13')">Last 3 Months</button>
+                <button class="time-toggle-btn" data-period="3moAgo" onclick="switchTimePeriod('3moAgo')">3+ Months Ago</button>
+                <button class="time-toggle-btn" data-period="first4" onclick="switchTimePeriod('first4')">First Month</button>
+            </div>
+            <p id="tierPeriodLabel" style="text-align:center; margin-bottom:0.5rem; color: var(--copilot-cyan); font-weight:600; font-size:0.9rem;">Entire Period</p>` : ''}
             <table>
                 <thead>
                     <tr><th>User Tier ${tip('Users ranked by actions per user and grouped into percentile bands. Top 10% are your champions; Bottom 25% may need enablement support.')}</th><th>Active Users</th><th>Actions/Month ${tip('Average monthly Copilot actions per user in this tier.')}</th><th>Monthly Investment ${tip('Number of active users in this tier × license cost per month.')}</th><th>Monthly Value ${tip('Productivity value generated by this tier based on their actions and the configured time savings.')}</th><th>ROI ${tip('Monthly value ÷ monthly investment for this tier. Shows which user segments generate the most return.')}</th></tr>
                 </thead>
-                <tbody>${tierRows}</tbody>
+                <tbody id="tierTableBody">${tierRows}</tbody>
             </table>
         </div>
         `);
@@ -1027,6 +1243,7 @@ function renderResults() {
     const roiMultipleWithRecap = valuePerMonthWithRecap / metrics.monthlyCost;
 
     const showRecap = config.intelligentRecapActions > 0;
+    const hasTimePeriods = !!(uploadedData.sortedDates && uploadedData.sortedDates.length > 4);
 
     // Sort teams by monthly value using configured minutes per action
     const sortedTeams = rows.map(row => {
@@ -1096,7 +1313,7 @@ function renderResults() {
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Power User Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The percentage of licensed users classified as Power Users — averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. These are your AI champions.</span></span></span></div>
                     <div class="metric-value">${metrics.powerUserRate.toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users</div>
+                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users <span style="color: var(--copilot-cyan); font-size: 0.8rem;">(last 4 weeks)</span></div>
                 </div>
 
                 <div class="metric-card">
@@ -1186,11 +1403,18 @@ function renderResults() {
 
             ${section('Top 10 by Value Generated', `<div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
                 <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
+                ${hasTimePeriods ? `<div class="time-toggle-bar" style="display:flex; justify-content:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+                    <button class="time-toggle-btn active" data-period="all" onclick="switchTimePeriod('all')">Entire Period</button>
+                    <button class="time-toggle-btn" data-period="last4" onclick="switchTimePeriod('last4')">Last 4 Weeks</button>
+                    <button class="time-toggle-btn" data-period="last13" onclick="switchTimePeriod('last13')">Last 3 Months</button>
+                    <button class="time-toggle-btn" data-period="3moAgo" onclick="switchTimePeriod('3moAgo')">3+ Months Ago</button>
+                    <button class="time-toggle-btn" data-period="first4" onclick="switchTimePeriod('first4')">First Month</button>
+                </div>` : ''}
                 <table>
                     <thead>
                         <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users</th><th>Power Users</th><th>Actions/User</th><th>Monthly Value</th><th>Hrs/Week</th></tr>
                     </thead>
-                    <tbody>
+                    <tbody id="top10Body">
                         ${sortedTeams.slice(0, 10).map((team, index) => `
                         <tr>
                             <td style="color: var(--copilot-cyan); font-weight: 700; font-size: 1.1rem;">${index + 1}</td>

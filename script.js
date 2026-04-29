@@ -1024,6 +1024,7 @@ function renderResults() {
             <header>
                 <h1>M365 Copilot Productivity ROI Analysis Results</h1>
                 <p class="subtitle">Based on ${rows.length} ${uploadedData.groupLabel || 'teams'} • ${config.analysisWeeks} weeks of data${uploadedData.dateRange ? ` (${uploadedData.dateRange})` : ''}</p>
+                <p style="margin-top: 0.5rem;"><a href="https://aka.ms/Analytics-Hub" target="_blank" style="color: var(--copilot-cyan); font-weight: 600; text-decoration: none; font-size: 0.95rem;">📊 View more reports on the Analytics Hub →</a></p>
             </header>
 
             ${showRecap ? `
@@ -1048,14 +1049,14 @@ function renderResults() {
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Enabled Users <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The total number of people in your organization who have been assigned a Microsoft 365 Copilot license.</span></span></span></div>
-                    <div class="metric-value">${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                    <div class="metric-value">${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                     <div class="metric-sublabel">Licensed for Copilot</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Activation Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">Of all the people who have a Copilot license, this is the percentage who actually used it at least once. For example, if 100 people have licenses and 60 used Copilot, the activation rate is 60%.</span></span></span></div>
                     <div class="metric-value">${metrics.activationRate.toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 2})} active users</div>
+                    <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} ÷ ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licensed</div>
                 </div>
 
                 <div class="metric-card">
@@ -1073,33 +1074,33 @@ function renderResults() {
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Weekly Hours Saved <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">Estimated time saved per week across all users. Calculated by multiplying total weekly Copilot actions by the configured minutes saved per action, then converting to hours.</span></span></span></div>
                     <div class="metric-value">${metrics.weeklyHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">Conservative estimate</div>
+                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} actions × ${config.minutesPerAction} min ÷ 60</div>
                 </div>
             </div>
 
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div class="metric-label">WAU (Weekly Active Users)</div>
-                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
-                    <div class="metric-sublabel">${(metrics.totalActiveUsers / metrics.totalEnabledUsers * 100).toFixed(1)}% of licensed</div>
+                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div class="metric-sublabel">${(metrics.totalActiveUsers / metrics.totalEnabledUsers * 100).toFixed(1)}% of ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licensed</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label">MAU (Monthly Active Users)</div>
-                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                     <div class="metric-sublabel">Based on ${config.analysisWeeks}-week rolling data</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label">Weekly Productivity Value</div>
                     <div class="metric-value">$${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})} actions × ${config.minutesPerAction} min</div>
+                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} actions × ${config.minutesPerAction} min × $${config.professionalRate}/hr</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label">Monthly Productivity Value</div>
                     <div class="metric-value">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">${metrics.roiMultiple.toFixed(1)}x return on license cost</div>
+                    <div class="metric-sublabel">$${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}/wk × 4.33 = ${metrics.roiMultiple.toFixed(1)}x ROI</div>
                 </div>
             </div>
 
@@ -1150,6 +1151,7 @@ function renderResults() {
 
             <div class="leaderboard-container">
                 <h2>Top 10 by Value Generated</h2>
+                <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
                 ${sortedTeams.slice(0, 10).map((team, index) => `
                     <div class="leaderboard-item">
                         <div class="leaderboard-rank">${index + 1}</div>

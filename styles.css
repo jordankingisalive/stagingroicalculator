@@ -469,7 +469,7 @@ header h1 {
     border-top: 3px solid var(--copilot-blue);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     container-type: inline-size;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .metric-card:hover {

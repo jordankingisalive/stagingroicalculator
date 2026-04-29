@@ -27,14 +27,22 @@ document.addEventListener('mouseover', function(e) {
     if (!tip) return;
     const rect = icon.getBoundingClientRect();
     const tipW = 260;
+    // Temporarily show to measure height
+    tip.style.visibility = 'hidden';
+    tip.style.display = 'block';
+    tip.style.opacity = '0';
+    const tipH = tip.offsetHeight || 80;
+    tip.style.display = '';
+    tip.style.visibility = '';
+    tip.style.opacity = '';
     let left = rect.left + rect.width / 2 - tipW / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - tipW - 8));
     tip.style.left = left + 'px';
-    tip.style.top = (rect.top - tip.offsetHeight - 10) + 'px';
+    // Default: show above
+    let top = rect.top - tipH - 10;
     // If it would go off-screen top, show below instead
-    if (rect.top - tip.offsetHeight - 10 < 8) {
-        tip.style.top = (rect.bottom + 10) + 'px';
-    }
+    if (top < 8) top = rect.bottom + 10;
+    tip.style.top = top + 'px';
 });
 
 // Initialize upload functionality
@@ -1114,9 +1122,9 @@ function renderResults() {
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Active User Rate ${tip('The percentage of licensed users who are actively using Copilot. Calculated as: weekly active users ÷ total enabled users.')}</span></div>
-                    <div class="metric-value">${(metrics.totalActiveUsers / metrics.totalEnabledUsers * 100).toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} of ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licensed</div>
+                    <div class="metric-label"><span class="metric-label-row">Monthly Actions/User ${tip('Average monthly Copilot actions per active user. This is the key engagement depth metric — higher means users are integrating Copilot into more workflows.')}</span></div>
+                    <div class="metric-value">${(metrics.avgActionsPerUser * 4.33).toFixed(0)}</div>
+                    <div class="metric-sublabel">${metrics.avgActionsPerUser.toFixed(1)}/wk × 4.33</div>
                 </div>
 
                 <div class="metric-card">
@@ -1178,22 +1186,26 @@ function renderResults() {
             </div>
             `)}<!-- end Productivity ROI -->
 
-            ${section('Top 10 by Value Generated', `<div class="leaderboard-container" style="box-shadow:none;border:none;padding:0;margin:0;">
+            ${section('Top 10 by Value Generated', `<div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
                 <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
-                ${sortedTeams.slice(0, 10).map((team, index) => `
-                    <div class="leaderboard-item" style="display: grid; grid-template-columns: 40px 1.5fr repeat(4, 1fr) auto; align-items: center; gap: 0.5rem;">
-                        <div class="leaderboard-rank">${index + 1}</div>
-                        <div class="leaderboard-name">${team.team}</div>
-                        <div style="text-align: center;"><span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">Active</span><strong>${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong></div>
-                        <div style="text-align: center;"><span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">Avg Days/Wk</span><strong>${team.engagement.toFixed(1)}</strong></div>
-                        <div style="text-align: center;"><span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">Power Users</span><strong>${team.powerUsers}</strong></div>
-                        <div style="text-align: center;"><span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">Actions/User</span><strong>${team.actionsPerUser.toFixed(1)}</strong></div>
-                        <div style="text-align: right;">
-                            <span class="leaderboard-value">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo</span>
-                            <span class="leaderboard-subvalue">${team.weeklyHours.toFixed(0)} hrs/week</span>
-                        </div>
-                    </div>
-                `).join('')}
+                <table>
+                    <thead>
+                        <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users</th><th>Avg Days/Wk</th><th>Power Users</th><th>Actions/User</th><th>Monthly Value</th><th>Hrs/Week</th></tr>
+                    </thead>
+                    <tbody>
+                        ${sortedTeams.slice(0, 10).map((team, index) => `
+                        <tr>
+                            <td style="color: var(--copilot-cyan); font-weight: 700; font-size: 1.1rem;">${index + 1}</td>
+                            <td style="font-weight: 600;">${team.team}</td>
+                            <td>${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                            <td>${team.engagement.toFixed(1)}</td>
+                            <td>${team.powerUsers}</td>
+                            <td>${team.actionsPerUser.toFixed(1)}</td>
+                            <td style="color: var(--green); font-weight: 700;">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                            <td>${team.weeklyHours.toFixed(0)}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
             </div>
             `)}<!-- end Top 10 -->
 

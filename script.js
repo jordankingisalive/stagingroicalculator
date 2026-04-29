@@ -774,43 +774,42 @@ function buildProjectionTables(metrics, sortedTeams) {
             </table>
         </div>`;
 
-    // ---- 3-YEAR PROJECTION TABLE ----
+    // ---- EXPANSION PROJECTION TABLE ----
     const scaledMonthly = metrics.valuePerMonth;
     const scaledAnnual = scaledMonthly * 12;
     const annualCost = metrics.annualCost;
+    const currentActivation = activeUsers / totalUsers;
+    const valuePerActiveUser = activeUsers > 0 ? scaledMonthly / activeUsers : 0;
 
-    // Expansion scenarios: 2x, 5x, 10x, 20x current users
-    const expansionMultiples = [2, 5, 10, 20];
-    let projRows = `
-        <tr>
-            <td><strong>Current deployment</strong></td>
-            <td>${totalUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-            <td>$${scaledMonthly.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-            <td>$${scaledAnnual.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-            <td>$${annualCost.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-            <td style="color: var(--green); font-weight: bold;">${metrics.roiMultiple.toFixed(1)}x</td>
+    // Expansion scenarios with realistic adoption curves
+    // As you scale, new users adopt at lower rates (no training, less tech-savvy, etc.)
+    const expansionScenarios = [
+        { users: totalUsers, label: 'Current deployment', adoptionRate: currentActivation, isCurrentRow: true },
+        { users: Math.round(totalUsers * 2), label: null, adoptionRate: Math.min(currentActivation, 0.80) },
+        { users: Math.round(totalUsers * 5), label: null, adoptionRate: Math.min(currentActivation * 0.75, 0.65) },
+        { users: Math.round(totalUsers * 10), label: null, adoptionRate: Math.min(currentActivation * 0.60, 0.55) },
+        { users: Math.round(totalUsers * 20), label: null, adoptionRate: Math.min(currentActivation * 0.50, 0.45) },
+    ];
+
+    let projRows = '';
+    expansionScenarios.forEach(s => {
+        const adoptedUsers = Math.round(s.users * s.adoptionRate);
+        const mv = adoptedUsers * valuePerActiveUser;
+        const av = mv * 12;
+        const ac = s.users * licenseCost * 12;
+        const roi = ac > 0 ? (av / ac).toFixed(1) : '0.0';
+        const label = s.label || `${s.users.toLocaleString(undefined, {maximumFractionDigits: 0})} users`;
+        const adoptPct = (s.adoptionRate * 100).toFixed(0);
+        const rowStyle = s.isCurrentRow ? ' style="border-bottom: 2px solid var(--copilot-blue);"' : '';
+        projRows += `<tr${rowStyle}>
+            <td>${s.isCurrentRow ? '<strong>' + label + '</strong>' : label}</td>
+            <td>${s.users.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>${adoptPct}% (${adoptedUsers.toLocaleString(undefined, {maximumFractionDigits: 0})})</td>
+            <td>$${mv.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>$${av.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>$${ac.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td style="color: ${parseFloat(roi) >= 1 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">${roi}x</td>
         </tr>`;
-
-    expansionMultiples.forEach(mult => {
-        const expUsers = totalUsers * mult;
-        const scenarios = [
-            { label: `${expUsers.toLocaleString(undefined, {maximumFractionDigits: 2})} users @ 50%`, factor: mult * 0.5 },
-            { label: `${expUsers.toLocaleString(undefined, {maximumFractionDigits: 2})} users @ 100%`, factor: mult },
-        ];
-        scenarios.forEach(s => {
-            const mv = scaledMonthly * s.factor;
-            const av = mv * 12;
-            const ac = expUsers * licenseCost * 12;
-            const roi = ac > 0 ? (av / ac).toFixed(1) : '0.0';
-            projRows += `<tr>
-                <td>${s.label} adoption</td>
-                <td>${expUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-                <td>$${mv.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-                <td>$${av.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-                <td>$${ac.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
-                <td style="color: var(--green); font-weight: bold;">${roi}x</td>
-            </tr>`;
-        });
     });
 
     const avgMonthlyActions = avgMonthly.toFixed(0);
@@ -819,21 +818,21 @@ function buildProjectionTables(metrics, sortedTeams) {
         <div class="roi-table-container">
             <h2>Expansion Projections</h2>
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
-                Projected value if current usage patterns hold as deployment scales.
-                All values at ${mpa} min/action, $${rate}/hr.
+                Projected value as deployment scales, with adoption rates that decrease at larger scales to reflect realistic rollout curves.
+                Value per active user: $${valuePerActiveUser.toFixed(0)}/mo at ${mpa} min/action, $${rate}/hr.
             </p>
             <table>
                 <thead>
-                    <tr><th>Scenario</th><th>Users</th><th>Monthly Value</th><th>Annual Value</th><th>Annual Cost</th><th>ROI</th></tr>
+                    <tr><th>Scenario</th><th>Licensed</th><th>Adoption (Active)</th><th>Monthly Value</th><th>Annual Value</th><th>Annual Cost</th><th>ROI</th></tr>
                 </thead>
                 <tbody>${projRows}</tbody>
             </table>
             <div class="info-box" style="margin-top:1rem;">
                 <p><strong>What does adoption % mean?</strong><br>
-                Your current users average <strong>~${avgMonthlyActions} actions/month</strong>.
-                <strong>100% adoption</strong> assumes new users reach that same average.
-                <strong>50% adoption</strong> assumes new users ramp to half that level (~${(avgMonthly * 0.5).toFixed(0)} actions/month),
-                reflecting a conservative first-year rollout where users are still building habits.</p>
+                <p><strong>How are adoption rates modeled?</strong><br>
+                Your current deployment has a <strong>${(currentActivation * 100).toFixed(0)}% adoption rate</strong>.
+                As you scale to larger user bases, adoption rates naturally decrease — new populations tend to include less tech-forward users, 
+                and enablement programs take time to reach everyone. The projections use a tapering curve from your current rate down to ~45% at 20x scale.</p>
                 <p style="margin-top:0.75rem;"><strong>Need more detailed projections?</strong>
                 Use the <a href="https://jordankingisalive.github.io/CopilotROICalculator/roi-calculator.html" target="_blank" style="color: var(--copilot-cyan); font-weight: 600;">ROI Calculator</a>
                 to model custom user counts, pricing tiers, and adoption curves for your specific scenario.</p>

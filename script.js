@@ -1312,9 +1312,36 @@ function renderResults() {
     initTableSorting();
 }
 
-// Export results to PDF using browser print dialog
+// Export results to a styled PDF preserving the page's visual appearance
 function exportToPDF() {
-    window.print();
+    const container = document.querySelector('.results-container');
+    if (!container) return;
+
+    const btn = document.querySelector('[onclick="exportToPDF()"]');
+    const origText = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = 'Generating PDF…'; btn.disabled = true; }
+
+    // Open all collapsed <details> sections so content is visible in the capture
+    const closedDetails = container.querySelectorAll('details:not([open])');
+    closedDetails.forEach(d => d.setAttribute('open', ''));
+
+    const opt = {
+        margin:       [10, 10, 10, 10],
+        filename:     'Copilot_ROI_Analysis.pdf',
+        image:        { type: 'jpeg', quality: 0.95 },
+        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#0B1120', scrollY: 0 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    html2pdf().set(opt).from(container).save().then(() => {
+        // Restore collapsed sections
+        closedDetails.forEach(d => d.removeAttribute('open'));
+        if (btn) { btn.textContent = origText; btn.disabled = false; }
+    }).catch(() => {
+        closedDetails.forEach(d => d.removeAttribute('open'));
+        if (btn) { btn.textContent = origText; btn.disabled = false; }
+    });
 }
 
 // Initialize table sorting functionality

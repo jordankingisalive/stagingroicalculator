@@ -155,10 +155,6 @@ function showFilePreview(fileName, data) {
                     <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Licensed Users</div>
                 </div>
                 <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${activationRate}%</div>
-                    <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Activation</div>
-                </div>
-                <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
                     <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                     <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Weekly Actions</div>
                 </div>

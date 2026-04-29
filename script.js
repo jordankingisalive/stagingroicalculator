@@ -1321,26 +1321,58 @@ function exportToPDF() {
     const origText = btn ? btn.textContent : '';
     if (btn) { btn.textContent = 'Generating PDF…'; btn.disabled = true; }
 
+    function resetBtn() {
+        if (btn) { btn.textContent = origText; btn.disabled = false; }
+    }
+
     // Open all collapsed <details> sections so content is visible in the capture
     const closedDetails = container.querySelectorAll('details:not([open])');
     closedDetails.forEach(d => d.setAttribute('open', ''));
 
+    // Hide buttons during capture
+    const buttons = container.querySelectorAll('button, .toggle-switch, input[type="range"]');
+    buttons.forEach(el => el.dataset.prevDisplay = el.style.display);
+    buttons.forEach(el => { el.style.display = 'none'; });
+
+    // Temporarily constrain width so html2canvas doesn't choke on a giant canvas
+    const origWidth = container.style.width;
+    const origMaxWidth = container.style.maxWidth;
+    container.style.width = '900px';
+    container.style.maxWidth = '900px';
+
     const opt = {
-        margin:       [10, 10, 10, 10],
+        margin:       [8, 6, 8, 6],
         filename:     'Copilot_ROI_Analysis.pdf',
-        image:        { type: 'jpeg', quality: 0.95 },
-        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#0B1120', scrollY: 0 },
+        image:        { type: 'jpeg', quality: 0.85 },
+        html2canvas:  { scale: 1.5, useCORS: true, backgroundColor: '#0B1120',
+                        scrollY: -window.scrollY, windowWidth: 920,
+                        logging: false, removeContainer: true },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+        pagebreak:    { mode: ['css', 'legacy'], avoid: ['.collapsible-section', 'tr'] }
     };
 
+    function cleanup() {
+        container.style.width = origWidth;
+        container.style.maxWidth = origMaxWidth;
+        closedDetails.forEach(d => d.removeAttribute('open'));
+        buttons.forEach(el => { el.style.display = el.dataset.prevDisplay || ''; });
+        resetBtn();
+    }
+
+    // Safety timeout — if html2pdf hangs, restore UI after 45s
+    const safetyTimer = setTimeout(() => {
+        cleanup();
+        alert('PDF generation timed out. Try collapsing some sections and retrying.');
+    }, 45000);
+
     html2pdf().set(opt).from(container).save().then(() => {
-        // Restore collapsed sections
-        closedDetails.forEach(d => d.removeAttribute('open'));
-        if (btn) { btn.textContent = origText; btn.disabled = false; }
-    }).catch(() => {
-        closedDetails.forEach(d => d.removeAttribute('open'));
-        if (btn) { btn.textContent = origText; btn.disabled = false; }
+        clearTimeout(safetyTimer);
+        cleanup();
+    }).catch((err) => {
+        clearTimeout(safetyTimer);
+        cleanup();
+        console.error('PDF export failed:', err);
+        alert('PDF export failed. Please try again.');
     });
 }
 

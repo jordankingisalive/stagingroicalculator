@@ -1187,7 +1187,7 @@ function buildProjectionTables(metrics, sortedTeams) {
     // Initialize after render
     setTimeout(() => { if (document.getElementById('opp-slider')) updateOppCost(); }, 50);
 
-    return breakEvenHtml + tierHtml + opportunityHtml + projHtml;
+    return { tierHtml, breakEvenHtml, opportunityHtml, projHtml };
 }
 
 // Opportunity cost slider update
@@ -1290,14 +1290,72 @@ function renderResults() {
         };
     }).sort((a, b) => b.monthlyValue - a.monthlyValue);
 
+    // Compute trend: last 4 weeks vs prior 4 weeks
+    let trendBadge = '';
+    let trendSummary = '';
+    if (hasTimePeriods && uploadedData.sortedDates.length >= 8) {
+        const recentTeams = computeTeamsForPeriod('last4');
+        const dates = uploadedData.sortedDates;
+        const prior4Dates = dates.slice(-8, -4);
+        const prior4Set = new Set(prior4Dates.map(d => typeof d === 'string' ? d : d.toISOString().slice(0, 10)));
+
+        if (recentTeams && prior4Dates.length > 0) {
+            // Compute prior period total actions
+            let priorTotalActions = 0;
+            let priorActiveUsers = 0;
+            for (const row of rows) {
+                const wd = uploadedData.weeklyData[row.team];
+                if (!wd) continue;
+                const filtered = wd.filter(w => {
+                    const key = w.date instanceof Date ? w.date.toISOString().slice(0, 10) : (typeof w.date === 'string' ? w.date.slice(0, 10) : '');
+                    return prior4Set.has(key);
+                });
+                if (filtered.length > 0) {
+                    const avgApu = filtered.reduce((s, w) => s + w.actionsPerUser, 0) / filtered.length;
+                    const avgActive = filtered.reduce((s, w) => s + (w.activePercent || 0), 0) / filtered.length;
+                    const en = filtered[filtered.length - 1].enabled || row.enabledUsers;
+                    const au = Math.round((en * avgActive) / 100);
+                    priorTotalActions += avgApu * au;
+                    priorActiveUsers += au;
+                }
+            }
+
+            const recentTotalActions = recentTeams.reduce((s, t) => s + t.weeklyActions, 0);
+            const recentActiveUsers = recentTeams.reduce((s, t) => s + t.activeUsers, 0);
+            const recentAvgApu = recentActiveUsers > 0 ? recentTotalActions / recentActiveUsers : 0;
+            const priorAvgApu = priorActiveUsers > 0 ? priorTotalActions / priorActiveUsers : 0;
+
+            if (priorAvgApu > 0) {
+                const pctChange = ((recentAvgApu - priorAvgApu) / priorAvgApu) * 100;
+                const direction = pctChange >= 0 ? '↑' : '↓';
+                const color = pctChange >= 0 ? 'var(--green)' : 'var(--red, #ef4444)';
+                trendBadge = `<span style="font-size:0.75rem; color:${color}; font-weight:600; margin-left:0.4rem;">${direction}${Math.abs(pctChange).toFixed(0)}% vs prior 4wk</span>`;
+                trendSummary = pctChange >= 0 ? `, trending <strong style="color: var(--green);">up ${Math.abs(pctChange).toFixed(0)}%</strong> vs prior month` : `, trending <strong style="color: var(--red, #ef4444);">down ${Math.abs(pctChange).toFixed(0)}%</strong> vs prior month`;
+            }
+        }
+    }
+
+    // Pre-compute projection sections so we can place them in different locations
+    const projections = buildProjectionTables(metrics, sortedTeams);
+
     const html = `
         <div class="results-container">
             <header>
                 <h1>M365 Copilot Productivity ROI Analysis Results</h1>
                 <p class="subtitle">Based on ${rows.length} ${uploadedData.groupLabel || 'teams'} • ${config.analysisWeeks} weeks of data${uploadedData.dateRange ? ` (${uploadedData.dateRange})` : ''}</p>
                 <p style="margin-top: 0.5rem;"><a href="https://aka.ms/Analytics-Hub" target="_blank" style="color: var(--copilot-cyan); font-weight: 600; text-decoration: none; font-size: 0.95rem;">📊 View more reports on the Analytics Hub →</a></p>
-                <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary); font-style: italic;">⛶ This report is best viewed in full screen. Tooltips may not appear unless the browser window is maximized.</p>
+                <p class="print-hide" style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary); font-style: italic;">⛶ This report is best viewed in full screen. Tooltips may not appear unless the browser window is maximized.</p>
             </header>
+
+            <!-- Executive Summary -->
+            <div style="background: linear-gradient(135deg, rgba(74,158,247,0.08), rgba(0,212,255,0.08)); border: 1px solid rgba(74,158,247,0.3); border-radius: 12px; padding: 1.25rem 1.5rem; margin: 1rem 0 1.5rem; text-align: center;">
+                <p style="font-size: 1.05rem; color: var(--text-primary); margin: 0; line-height: 1.6;">
+                    Your <strong style="color: var(--copilot-cyan);">${metrics.totalEnabledUsers.toLocaleString()}</strong> Copilot licenses generate
+                    <strong style="color: var(--green);">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}/month</strong> in productivity value —
+                    a <strong style="color: var(--green);">${metrics.roiMultiple.toFixed(1)}x return</strong> on investment at
+                    <strong style="color: var(--copilot-cyan);">${metrics.activationRate.toFixed(0)}% adoption</strong>${trendSummary}.
+                </p>
+            </div>
 
             ${showRecap ? `
             <!-- Intelligent Recap Toggle -->
@@ -1318,103 +1376,71 @@ function renderResults() {
             </div>
             ` : ''}
 
-            ${section('Key Metrics', `<div class="metrics-grid">
+            ${section('Key Metrics', `
+            <!-- Hero Metrics Row -->
+            <div class="metrics-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 1.5rem;">
+                <div class="metric-card" style="border: 2px solid var(--green); background: linear-gradient(135deg, rgba(34,197,94,0.05), rgba(34,197,94,0.02));">
+                    <div class="metric-label"><span class="metric-label-row">Monthly ROI Multiple ${tip('Monthly productivity value ÷ monthly license cost. A 3x ROI means every $1 spent on licenses generates $3 in productivity value.')}</span></div>
+                    <div class="metric-value" style="font-size: 3rem; color: var(--green);">${metrics.roiMultiple.toFixed(1)}x</div>
+                    <div class="metric-sublabel">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo value ÷ $${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo cost</div>
+                </div>
+                <div class="metric-card" style="border: 2px solid var(--copilot-cyan); background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(0,212,255,0.02));">
+                    <div class="metric-label"><span class="metric-label-row">Monthly Productivity Value ${tip('The total dollar value Copilot generates each month. Calculated as: total monthly actions × minutes per action ÷ 60 × hourly rate.')}</span></div>
+                    <div class="metric-value" style="font-size: 3rem; color: var(--copilot-cyan);">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div class="metric-sublabel">$${(metrics.valuePerMonth * 12).toLocaleString(undefined, {maximumFractionDigits: 0})}/year • $${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}/week</div>
+                </div>
+            </div>
+
+            <!-- Supporting Metrics Row -->
+            <div class="metrics-grid">
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Enabled Users <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The total number of people in your organization who have been assigned a Microsoft 365 Copilot license.</span></span></span></div>
+                    <div class="metric-label"><span class="metric-label-row">Adoption Rate ${tip('The percentage of licensed users who are actively using Copilot. Higher adoption means fewer unused licenses and more organizational value.')}</span></div>
+                    <div class="metric-value">${metrics.activationRate.toFixed(1)}%</div>
+                    <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} of ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licensed users active</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label"><span class="metric-label-row">Weekly Actions per User ${tip('The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.')}${trendBadge}</span></div>
+                    <div class="metric-value">${metrics.avgActionsPerUser.toFixed(1)}</div>
+                    <div class="metric-sublabel">${(metrics.avgActionsPerUser * 4.33).toFixed(0)}/month • ${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} total/week</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label"><span class="metric-label-row">Power User Rate ${tip('The percentage of licensed users classified as Power Users — averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. These are your AI champions.')}</span></div>
+                    <div class="metric-value">${metrics.powerUserRate.toFixed(1)}%</div>
+                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users <span style="color: var(--copilot-cyan); font-size: 0.8rem;">(last 4 weeks)</span></div>
+                </div>
+            </div>
+
+            <!-- Detail Metrics Row -->
+            <div class="metrics-grid" style="margin-top: 1rem;">
+                <div class="metric-card">
+                    <div class="metric-label"><span class="metric-label-row">Enabled Users ${tip('The total number of people in your organization who have been assigned a Microsoft 365 Copilot license.')}</span></div>
                     <div class="metric-value">${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                     <div class="metric-sublabel">Licensed for Copilot</div>
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Power User Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The percentage of licensed users classified as Power Users — averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. These are your AI champions.</span></span></span></div>
-                    <div class="metric-value">${metrics.powerUserRate.toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users <span style="color: var(--copilot-cyan); font-size: 0.8rem;">(last 4 weeks)</span></div>
-                </div>
-
-                <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Weekly Actions per User <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.</span></span></span></div>
-                    <div class="metric-value">${metrics.avgActionsPerUser.toFixed(1)}</div>
-                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} total/week</div>
-                </div>
-
-                <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Weekly Hours Saved <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">Estimated time saved per week across all users. Calculated by multiplying total weekly Copilot actions by the configured minutes saved per action, then converting to hours.</span></span></span></div>
+                    <div class="metric-label"><span class="metric-label-row">Weekly Hours Saved ${tip('Estimated time saved per week across all users. Calculated by multiplying total weekly Copilot actions by the configured minutes saved per action.')}</span></div>
                     <div class="metric-value">${metrics.weeklyHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                     <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} actions × ${config.minutesPerAction} min ÷ 60</div>
                 </div>
+
+                <div class="metric-card">
+                    <div class="metric-label"><span class="metric-label-row">Cost per Hour Saved ${tip('How much license cost you pay for each hour of productivity gained. Lower is better.')}</span></div>
+                    <div class="metric-value">$${(metrics.monthlyCost / (metrics.weeklyHoursSaved * 4.33)).toFixed(2)}</div>
+                    <div class="metric-sublabel">$${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo ÷ ${(metrics.weeklyHoursSaved * 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})} hrs/mo</div>
+                </div>
             </div>
 
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Weekly Actions per User ${tip('The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.')}</span></div>
-                    <div class="metric-value">${metrics.avgActionsPerUser.toFixed(1)}</div>
-                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} total across ${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} users</div>
-                </div>
-
-                <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Monthly Actions/User ${tip('Average monthly Copilot actions per active user. This is the key engagement depth metric — higher means users are integrating Copilot into more workflows.')}</span></div>
-                    <div class="metric-value">${(metrics.avgActionsPerUser * 4.33).toFixed(0)}</div>
-                    <div class="metric-sublabel">${metrics.avgActionsPerUser.toFixed(1)}/wk × 4.33</div>
-                </div>
-
-                <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Weekly Productivity Value ${tip('The estimated dollar value of time saved each week. Calculated as: total weekly actions × minutes per action ÷ 60 × hourly rate.')}</span></div>
-                    <div class="metric-value">$${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} actions × ${config.minutesPerAction} min × $${config.professionalRate}/hr</div>
-                </div>
-
-                <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Monthly Productivity Value ${tip('Weekly productivity value × 4.33 (average weeks per month). This is the headline number — the total dollar value Copilot generates each month for your organization.')}</span></div>
-                    <div class="metric-value">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">$${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}/wk × 4.33 = ${metrics.roiMultiple.toFixed(1)}x ROI</div>
-                </div>
+            <!-- Investment Context (replaces standalone Productivity ROI section) -->
+            <div style="margin-top: 1.25rem; padding: 1rem 1.25rem; background: var(--surface-raised, #253449); border-radius: 10px; border-left: 3px solid var(--copilot-blue);">
+                <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.7;">
+                    <strong style="color: var(--text-primary);">Investment:</strong> $${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/month ($${metrics.annualCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/year) for ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licenses at $${config.licenseCost}/user/month<br>
+                    <strong style="color: var(--text-primary);">Calculation:</strong> ${metrics.totalMonthlyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} monthly actions × ${metrics.minsPerAction} min ÷ 60 × $${config.professionalRate}/hr = $${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}/month
+                </p>
             </div>
             `)}<!-- end Key Metrics -->
-
-            ${section('Productivity ROI Calculation', `<div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Time Savings Assumption ${tip('The number of minutes each Copilot action is estimated to save. Default is 6 minutes based on Microsoft research. You can adjust this in the config.')}</th>
-                            <th>Hours/Month ${tip('Total actions per month × minutes per action ÷ 60. This is the raw time saved across all users.')}</th>
-                            <th>Monthly Value ${tip('Hours saved × professional hourly rate. Represents the dollar value of employee time reclaimed by Copilot.')}</th>
-                            <th>Annual Value ${tip('Monthly value × 12. The projected yearly productivity gain.')}</th>
-                            <th>Monthly ROI Multiple ${tip('Monthly productivity value ÷ monthly license cost. A 3x ROI means every $1 spent on licenses generates $3 in productivity value.')}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr class="highlight-row">
-                            <td><strong>${metrics.minsPerAction} minutes per action</strong><br><small>Configurable setting</small></td>
-                            <td>${metrics.hoursPerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})} hrs</td>
-                            <td id="dataMonthlyValue"
-                                data-without-recap="$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})}"
-                                data-with-recap="$${valuePerMonthWithRecap.toLocaleString(undefined, {maximumFractionDigits: 2})}">
-                                ${showRecap ? `$${valuePerMonthWithRecap.toLocaleString(undefined, {maximumFractionDigits: 2})}` : `$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 2})}`}
-                            </td>
-                            <td id="dataAnnualValue"
-                                data-without-recap="$${metrics.annualValue.toLocaleString(undefined, {maximumFractionDigits: 2})}"
-                                data-with-recap="$${annualValueWithRecap.toLocaleString(undefined, {maximumFractionDigits: 2})}">
-                                ${showRecap ? `$${annualValueWithRecap.toLocaleString(undefined, {maximumFractionDigits: 2})}` : `$${metrics.annualValue.toLocaleString(undefined, {maximumFractionDigits: 2})}`}
-                            </td>
-                            <td id="dataROIMultiple" style="color: var(--green); font-weight: bold;"
-                                data-without-recap="${metrics.roiMultiple.toFixed(1)}x"
-                                data-with-recap="${roiMultipleWithRecap.toFixed(1)}x">
-                                ${showRecap ? `${roiMultipleWithRecap.toFixed(1)}x` : `${metrics.roiMultiple.toFixed(1)}x`}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td colspan="5" style="background: var(--light-gray); padding: 1rem;">
-                                <strong>Investment:</strong> $${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/month
-                                ($${metrics.annualCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/year) for ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licenses at $${config.licenseCost}/user/month<br>
-                                <strong>Professional Rate:</strong> $${config.professionalRate}/hour (fully-loaded cost)<br>
-                                <strong>Calculation:</strong> ${metrics.totalMonthlyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} monthly actions × ${metrics.minsPerAction} min ÷ 60 × $${config.professionalRate}/hr = $${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}
-                                ${showRecap ? `<br><strong>Intelligent Recap:</strong> ${config.intelligentRecapActions.toLocaleString(undefined, {maximumFractionDigits: 0})} actions × 0.5 hrs × $${config.professionalRate}/hr = $${recapMonthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo` : ''}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            `)}<!-- end Productivity ROI -->
 
             ${section('Top 10 by Value Generated', `<div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
                 <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
@@ -1441,10 +1467,22 @@ function renderResults() {
                             <td style="color: var(--green); font-weight: 700;">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                             <td>${team.weeklyHours.toFixed(0)}</td>
                         </tr>`).join('')}
+                        <tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700; background: rgba(74,158,247,0.05);">
+                            <td></td>
+                            <td>Top 10 Total</td>
+                            <td>${sortedTeams.slice(0, 10).reduce((s,t) => s + t.activeUsers, 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                            <td>${sortedTeams.slice(0, 10).reduce((s,t) => s + t.powerUsers, 0)}</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td style="color: var(--green);">$${sortedTeams.slice(0, 10).reduce((s,t) => s + t.monthlyValue, 0).toLocaleString(undefined, {maximumFractionDigits: 0})} <span style="font-size:0.75rem; font-weight:400; color: var(--text-secondary);">(${((sortedTeams.slice(0, 10).reduce((s,t) => s + t.monthlyValue, 0) / sortedTeams.reduce((s,t) => s + t.monthlyValue, 0)) * 100).toFixed(0)}% of total)</span></td>
+                            <td>${sortedTeams.slice(0, 10).reduce((s,t) => s + t.weeklyHours, 0).toFixed(0)}</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
             `)}<!-- end Top 10 -->
+
+            ${projections.tierHtml}
 
             ${section('All ' + (uploadedData.groupLabel || 'Teams') + ' Performance', `<div class="leaderboard-container" style="box-shadow:none;border:none;padding:0;margin:0;">
                 ${hasTimePeriods ? `<div class="time-toggle-bar" style="display:flex; justify-content:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
@@ -1457,6 +1495,9 @@ function renderResults() {
                 <p id="allTeamsPeriodNote" style="text-align:center; margin-bottom:0.75rem; color: var(--text-secondary); font-size: 0.85rem;">
                     Showing: <strong style="color: var(--copilot-cyan);">Entire Period</strong> &nbsp;|&nbsp; Averages computed across all weeks in selected period
                 </p>
+                <div style="display:flex; justify-content:center; margin-bottom:1rem;">
+                    <input type="text" id="teamSearchFilter" placeholder="Search ${uploadedData.groupLabel || 'teams'}..." oninput="filterTeamsTable()" style="width: 100%; max-width: 400px; padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); font-size: 0.9rem;">
+                </div>
                 <table id="teamsTable" class="sortable-table">
                     <thead>
                         <tr>
@@ -1513,7 +1554,7 @@ function renderResults() {
             </div>
             `)}<!-- end All Teams -->
 
-            ${buildProjectionTables(metrics, sortedTeams)}
+            ${projections.breakEvenHtml}${projections.opportunityHtml}${projections.projHtml}
 
             ${section('Calculation Methodology', `<div class="info-box" style="margin-top: 0;">
                 <strong>Calculation Methodology</strong>
@@ -1685,6 +1726,20 @@ async function exportToPDF() {
     } finally {
         cleanup();
     }
+}
+
+// Filter All Teams table by search input
+function filterTeamsTable() {
+    const query = (document.getElementById('teamSearchFilter')?.value || '').toLowerCase();
+    const table = document.getElementById('teamsTable');
+    if (!table) return;
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const teamCell = row.querySelector('td');
+        if (!teamCell) return;
+        const name = (teamCell.getAttribute('data-value') || teamCell.textContent || '').toLowerCase();
+        row.style.display = name.includes(query) ? '' : 'none';
+    });
 }
 
 // Initialize table sorting functionality

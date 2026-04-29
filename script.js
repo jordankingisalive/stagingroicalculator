@@ -410,7 +410,9 @@ function flattenData(rows) {
                 const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
                 const activePercent = avg(weeklyMetrics.map(w => w.activePercent).filter(v => v > 0));
                 const actionsPerUser = avg(weeklyMetrics.map(w => w.actions).filter(v => v > 0));
-                const powerUsersPercent = avg(weeklyMetrics.map(w => w.powerPercent).filter(v => v > 0));
+                // Power user rate: use only the last 4 weeks for a current benchmark
+                const recentWeeks = weeklyMetrics.slice(-4);
+                const powerUsersPercent = avg(recentWeeks.map(w => w.powerPercent).filter(v => v > 0));
                 const avgActiveDays = avg(weeklyMetrics.map(w => w.activeDays).filter(v => v > 0));
 
                 const activeUsers = Math.round((enabledUsers * activePercent) / 100);

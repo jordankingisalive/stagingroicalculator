@@ -306,13 +306,6 @@ function parseDate(dateString) {
         return new Date(usMatch[3], usMatch[1] - 1, usMatch[2]);
     }
 
-    // Try DD/MM/YYYY or D/M/YYYY (en-GB)
-    const gbMatch = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    if (gbMatch) {
-        // Ambiguous - default to US format handled above
-        return new Date(gbMatch[3], gbMatch[1] - 1, gbMatch[2]);
-    }
-
     // Fallback to native Date parsing
     const parsed = new Date(cleaned);
     return isNaN(parsed.getTime()) ? null : parsed;
@@ -374,11 +367,27 @@ function flattenData(rows) {
                     return { team: orgName, enabledUsers: 0, activeUsers: 0, weeklyActions: 0, monthlyActions: 0, engagement: 0, actionsPerUser: 0, powerUsers: 0 };
                 }
 
+                // Use latest week's enabled users (most current headcount)
                 const bestCols = dateMetricMap[bestDate];
                 const enabledUsers = parseNumber(row[bestCols['Enabled Users']] || 0);
-                const activePercent = parseNumber(row[bestCols['% Active Users']] || 0);
-                const actionsPerUser = parseNumber(row[bestCols['Avg Copilot Actions']] || 0);
-                const powerUsersPercent = parseNumber(row[bestCols['% Power Users']] || 0);
+
+                // Average metrics across ALL weeks with data (consistent with long-format aggregation)
+                const weeklyMetrics = sortedDates.map(date => {
+                    const cols = dateMetricMap[date];
+                    return {
+                        activePercent: parseNumber(row[cols['% Active Users']] || 0),
+                        actions: parseNumber(row[cols['Avg Copilot Actions']] || 0),
+                        powerPercent: parseNumber(row[cols['% Power Users']] || 0),
+                        activeDays: parseNumber(row[cols['Avg Active Days']] || 0),
+                        enabled: parseNumber(row[cols['Enabled Users']] || 0)
+                    };
+                }).filter(w => w.enabled > 0);
+
+                const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+                const activePercent = avg(weeklyMetrics.map(w => w.activePercent).filter(v => v > 0));
+                const actionsPerUser = avg(weeklyMetrics.map(w => w.actions).filter(v => v > 0));
+                const powerUsersPercent = avg(weeklyMetrics.map(w => w.powerPercent).filter(v => v > 0));
+                const avgActiveDays = avg(weeklyMetrics.map(w => w.activeDays).filter(v => v > 0));
 
                 const activeUsers = Math.round((enabledUsers * activePercent) / 100);
                 const weeklyActions = actionsPerUser * activeUsers;
@@ -400,7 +409,7 @@ function flattenData(rows) {
                     activeUsers,
                     weeklyActions,
                     monthlyActions,
-                    engagement: 0,
+                    engagement: avgActiveDays,
                     actionsPerUser,
                     powerUsers: powerUsersCount
                 };
@@ -430,7 +439,7 @@ function flattenData(rows) {
         activeUsers: ['Active Users', 'Active', 'Users'],
         totalActions: ['Total Actions', 'Actions', 'Total Activity', 'Avg Copilot Actions'],
         monthlyActions: ['Monthly Actions', 'Monthly Activity', 'Actions (Monthly)'],
-        engagement: ['Engagement %', 'Engagement', 'Engagement Rate', 'Engagement Percentage'],
+        engagement: ['Engagement %', 'Engagement', 'Engagement Rate', 'Engagement Percentage', 'Avg Active Days'],
         activeUsersPercent: ['% Active Users', 'Active Users %', 'Active %'],
         powerUsers: ['% Power Users', 'Power Users %', 'Power Users'],
         date: ['Date', 'Week', 'Period', 'Week Ending']
@@ -749,8 +758,8 @@ function buildProjectionTables(metrics, sortedTeams) {
         </tr>`;
     });
 
-    // Totals row
-    const totalTierInvestment = activeUsers * licenseCost;
+    // Totals row — investment is based on all licensed users (you pay for every license)
+    const totalTierInvestment = totalUsers * licenseCost;
     tierRows += `<tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700;">
         <td>ALL USERS</td>
         <td>${activeUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</td>
@@ -1082,9 +1091,9 @@ function renderResults() {
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">MAU (Monthly Active Users) ${tip('The number of unique users who performed at least one Copilot action in the past 4 weeks. In weekly-snapshot data, this often equals WAU since each row represents one week.')}</span></div>
-                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">Based on ${config.analysisWeeks}-week rolling data</div>
+                    <div class="metric-label"><span class="metric-label-row">Active User Rate ${tip('The percentage of licensed users who are actively using Copilot. Calculated as: weekly active users ÷ total enabled users.')}</span></div>
+                    <div class="metric-value">${(metrics.totalActiveUsers / metrics.totalEnabledUsers * 100).toFixed(1)}%</div>
+                    <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} of ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licensed</div>
                 </div>
 
                 <div class="metric-card">
@@ -1235,6 +1244,7 @@ function renderResults() {
                 <button class="btn-primary" onclick="location.reload()">Analyze Another File</button>
                 <button class="btn-secondary" onclick="window.print()">Print Report</button>
                 <button class="btn-secondary" onclick="exportToPDF()">Export to PDF</button>
+                <button class="btn-secondary" onclick="exportToPPTX()">Export to PPTX</button>
             </div>
         </div>
     `;

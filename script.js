@@ -418,7 +418,7 @@ function flattenData(rows) {
                 const activeUsers = Math.round((enabledUsers * activePercent) / 100);
                 const weeklyActions = actionsPerUser * activeUsers;
                 const monthlyActions = weeklyActions * 4.33;
-                const powerUsersCount = Math.round((activeUsers * powerUsersPercent) / 100);
+                const powerUsersCount = Math.round((enabledUsers * powerUsersPercent) / 100);
 
                 // Build weekly history for this org (for peak week calculation AND time-period toggle)
                 orgWeeklyData[orgName] = sortedDates
@@ -586,7 +586,7 @@ function flattenData(rows) {
             let powerUsersCount = 0;
             if (mapping.powerUsers && row[mapping.powerUsers]) {
                 const powerUsersPercent = parseNumber(row[mapping.powerUsers]);
-                powerUsersCount = Math.round((activeUsers * powerUsersPercent) / 100);
+                powerUsersCount = Math.round((enabledUsers * powerUsersPercent) / 100);
             }
 
             return {
@@ -746,7 +746,7 @@ function computeTeamsForPeriod(period) {
         const activeUsers = Math.round((enabledUsers * activePercent) / 100);
         const weeklyActions = actionsPerUser * activeUsers;
         const monthlyActions = weeklyActions * 4.33;
-        const powerUsersCount = Math.round((activeUsers * powerPercent) / 100);
+        const powerUsersCount = Math.round((enabledUsers * powerPercent) / 100);
         const monthlyValue = (monthlyActions * mpa / 60) * rate;
         const weeklyHours = (weeklyActions * mpa / 60);
 
@@ -897,6 +897,39 @@ function switchTimePeriod(period) {
     if (allTeamsNote) {
         allTeamsNote.innerHTML = `Showing: <strong style="color: var(--copilot-cyan);">${periodLabels[period]}</strong> &nbsp;|&nbsp; Averages computed across ${period === 'all' ? 'all weeks in selected period' : periodLabels[period].toLowerCase()}`;
     }
+
+    // --- Update Key Metrics ---
+    const totalActiveUsers = teams.reduce((s, t) => s + t.activeUsers, 0);
+    const totalWeeklyActions = teams.reduce((s, t) => s + t.weeklyActions, 0);
+    const totalPowerUsers = teams.reduce((s, t) => s + t.powerUsers, 0);
+    const totalEnabled = teams.reduce((s, t) => s + (t.enabledUsers || t.activeUsers), 0);
+    const avgActionsPerUser = totalActiveUsers > 0 ? totalWeeklyActions / totalActiveUsers : 0;
+    const weeklyHoursSaved = (totalWeeklyActions * mpa) / 60;
+    const weeklyValue = (totalWeeklyActions * mpa / 60) * rate;
+    const monthlyValue = weeklyValue * 4.33;
+    const monthlyCost = totalEnabled * licenseCost;
+    const roiMultiple = monthlyCost > 0 ? monthlyValue / monthlyCost : 0;
+    const powerUserRate = totalEnabled > 0 ? (totalPowerUsers / totalEnabled) * 100 : 0;
+    const adoptionRate = totalEnabled > 0 ? (totalActiveUsers / totalEnabled) * 100 : 0;
+    const costPerHour = (weeklyHoursSaved * 4.33) > 0 ? monthlyCost / (weeklyHoursSaved * 4.33) : 0;
+
+    const fmt = (n) => n.toLocaleString(undefined, {maximumFractionDigits: 0});
+    const el = (id) => document.getElementById(id);
+
+    if (el('km-roi')) el('km-roi').textContent = roiMultiple.toFixed(1) + 'x';
+    if (el('km-roiSub')) el('km-roiSub').textContent = `$${fmt(Math.round(monthlyValue))}/mo value ÷ $${fmt(Math.round(monthlyCost))}/mo cost`;
+    if (el('km-monthlyValue')) el('km-monthlyValue').textContent = `$${fmt(Math.round(monthlyValue))}`;
+    if (el('km-monthlyValueSub')) el('km-monthlyValueSub').textContent = `$${fmt(Math.round(monthlyValue * 12))}/year • $${fmt(Math.round(weeklyValue))}/week`;
+    if (el('km-adoption')) el('km-adoption').textContent = adoptionRate.toFixed(1) + '%';
+    if (el('km-adoptionSub')) el('km-adoptionSub').textContent = `${fmt(totalActiveUsers)} of ${fmt(totalEnabled)} licensed users active`;
+    if (el('km-actionsPerUser')) el('km-actionsPerUser').textContent = avgActionsPerUser.toFixed(1);
+    if (el('km-actionsPerUserSub')) el('km-actionsPerUserSub').textContent = `${(avgActionsPerUser * 4.33).toFixed(0)}/month • ${fmt(totalWeeklyActions)} total/week`;
+    if (el('km-powerUserRate')) el('km-powerUserRate').textContent = powerUserRate.toFixed(1) + '%';
+    if (el('km-powerUserSub')) el('km-powerUserSub').innerHTML = `${fmt(totalPowerUsers)} power users <span style="color: var(--copilot-cyan); font-size: 0.8rem;">(${periodLabels[period]})</span>`;
+    if (el('km-hoursSaved')) el('km-hoursSaved').textContent = fmt(Math.round(weeklyHoursSaved));
+    if (el('km-hoursSavedSub')) el('km-hoursSavedSub').textContent = `${fmt(totalWeeklyActions)} actions × ${mpa} min ÷ 60`;
+    if (el('km-costPerHour')) el('km-costPerHour').textContent = `$${costPerHour.toFixed(2)}`;
+    if (el('km-costPerHourSub')) el('km-costPerHourSub').textContent = `$${fmt(Math.round(monthlyCost))}/mo ÷ ${fmt(Math.round(weeklyHoursSaved * 4.33))} hrs/mo`;
 }
 
 // Build ROI projection tables (break-even, tiers, 3-year projections)
@@ -1377,17 +1410,24 @@ function renderResults() {
             ` : ''}
 
             ${section('Key Metrics', `
+            ${hasTimePeriods ? `<div class="time-toggle-bar" style="display:flex; justify-content:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+                <button class="time-toggle-btn active" data-period="all" onclick="switchTimePeriod('all')">Entire Period</button>
+                <button class="time-toggle-btn" data-period="last4" onclick="switchTimePeriod('last4')">Last 4 Weeks</button>
+                <button class="time-toggle-btn" data-period="last13" onclick="switchTimePeriod('last13')">Last 3 Months</button>
+                <button class="time-toggle-btn" data-period="3moAgo" onclick="switchTimePeriod('3moAgo')">3+ Months Ago</button>
+                <button class="time-toggle-btn" data-period="first4" onclick="switchTimePeriod('first4')">First Month</button>
+            </div>` : ''}
             <!-- Hero Metrics Row -->
             <div class="metrics-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 1.5rem;">
                 <div class="metric-card" style="border: 2px solid var(--green); background: linear-gradient(135deg, rgba(34,197,94,0.05), rgba(34,197,94,0.02));">
                     <div class="metric-label"><span class="metric-label-row">Monthly ROI Multiple ${tip('Monthly productivity value ÷ monthly license cost. A 3x ROI means every $1 spent on licenses generates $3 in productivity value.')}</span></div>
-                    <div class="metric-value" style="font-size: 3rem; color: var(--green);">${metrics.roiMultiple.toFixed(1)}x</div>
-                    <div class="metric-sublabel">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo value ÷ $${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo cost</div>
+                    <div class="metric-value" id="km-roi" style="font-size: 3rem; color: var(--green);">${metrics.roiMultiple.toFixed(1)}x</div>
+                    <div class="metric-sublabel" id="km-roiSub">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo value ÷ $${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo cost</div>
                 </div>
                 <div class="metric-card" style="border: 2px solid var(--copilot-cyan); background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(0,212,255,0.02));">
                     <div class="metric-label"><span class="metric-label-row">Monthly Productivity Value ${tip('The total dollar value Copilot generates each month. Calculated as: total monthly actions × minutes per action ÷ 60 × hourly rate.')}</span></div>
-                    <div class="metric-value" style="font-size: 3rem; color: var(--copilot-cyan);">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">$${(metrics.valuePerMonth * 12).toLocaleString(undefined, {maximumFractionDigits: 0})}/year • $${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}/week</div>
+                    <div class="metric-value" id="km-monthlyValue" style="font-size: 3rem; color: var(--copilot-cyan);">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div class="metric-sublabel" id="km-monthlyValueSub">$${(metrics.valuePerMonth * 12).toLocaleString(undefined, {maximumFractionDigits: 0})}/year • $${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}/week</div>
                 </div>
             </div>
 
@@ -1395,20 +1435,20 @@ function renderResults() {
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Adoption Rate ${tip('The percentage of licensed users who are actively using Copilot. Higher adoption means fewer unused licenses and more organizational value.')}</span></div>
-                    <div class="metric-value">${metrics.activationRate.toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} of ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licensed users active</div>
+                    <div class="metric-value" id="km-adoption">${metrics.activationRate.toFixed(1)}%</div>
+                    <div class="metric-sublabel" id="km-adoptionSub">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} of ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licensed users active</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Weekly Actions per User ${tip('The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.')}${trendBadge}</span></div>
-                    <div class="metric-value">${metrics.avgActionsPerUser.toFixed(1)}</div>
-                    <div class="metric-sublabel">${(metrics.avgActionsPerUser * 4.33).toFixed(0)}/month • ${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} total/week</div>
+                    <div class="metric-value" id="km-actionsPerUser">${metrics.avgActionsPerUser.toFixed(1)}</div>
+                    <div class="metric-sublabel" id="km-actionsPerUserSub">${(metrics.avgActionsPerUser * 4.33).toFixed(0)}/month • ${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} total/week</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Power User Rate ${tip('The percentage of licensed users classified as Power Users — averaging 20+ weekly Copilot actions with consistent usage in at least 9 of the past 12 weeks. These are your AI champions.')}</span></div>
-                    <div class="metric-value">${metrics.powerUserRate.toFixed(1)}%</div>
-                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users <span style="color: var(--copilot-cyan); font-size: 0.8rem;">(last 4 weeks)</span></div>
+                    <div class="metric-value" id="km-powerUserRate">${metrics.powerUserRate.toFixed(1)}%</div>
+                    <div class="metric-sublabel" id="km-powerUserSub">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users <span style="color: var(--copilot-cyan); font-size: 0.8rem;">(last 4 weeks)</span></div>
                 </div>
             </div>
 
@@ -1416,20 +1456,20 @@ function renderResults() {
             <div class="metrics-grid" style="margin-top: 1rem;">
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Enabled Users ${tip('The total number of people in your organization who have been assigned a Microsoft 365 Copilot license.')}</span></div>
-                    <div class="metric-value">${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div class="metric-value" id="km-enabledUsers">${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                     <div class="metric-sublabel">Licensed for Copilot</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Weekly Hours Saved ${tip('Estimated time saved per week across all users. Calculated by multiplying total weekly Copilot actions by the configured minutes saved per action.')}</span></div>
-                    <div class="metric-value">${metrics.weeklyHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} actions × ${config.minutesPerAction} min ÷ 60</div>
+                    <div class="metric-value" id="km-hoursSaved">${metrics.weeklyHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div class="metric-sublabel" id="km-hoursSavedSub">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} actions × ${config.minutesPerAction} min ÷ 60</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Cost per Hour Saved ${tip('How much license cost you pay for each hour of productivity gained. Lower is better.')}</span></div>
-                    <div class="metric-value">$${(metrics.monthlyCost / (metrics.weeklyHoursSaved * 4.33)).toFixed(2)}</div>
-                    <div class="metric-sublabel">$${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo ÷ ${(metrics.weeklyHoursSaved * 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})} hrs/mo</div>
+                    <div class="metric-value" id="km-costPerHour">$${(metrics.monthlyCost / (metrics.weeklyHoursSaved * 4.33)).toFixed(2)}</div>
+                    <div class="metric-sublabel" id="km-costPerHourSub">$${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo ÷ ${(metrics.weeklyHoursSaved * 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})} hrs/mo</div>
                 </div>
             </div>
 

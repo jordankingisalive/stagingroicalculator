@@ -1147,11 +1147,15 @@ function renderResults() {
                 <h2>Top 10 by Value Generated</h2>
                 <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
                 ${sortedTeams.slice(0, 10).map((team, index) => `
-                    <div class="leaderboard-item">
+                    <div class="leaderboard-item" style="display: grid; grid-template-columns: 40px 1.5fr repeat(4, 1fr) auto; align-items: center; gap: 0.5rem;">
                         <div class="leaderboard-rank">${index + 1}</div>
                         <div class="leaderboard-name">${team.team}</div>
-                        <div>
-                            <span class="leaderboard-value">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 2})}/mo</span>
+                        <div style="text-align: center;"><span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">Active</span><strong>${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong></div>
+                        <div style="text-align: center;"><span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">Avg Days/Wk</span><strong>${team.engagement.toFixed(1)}</strong></div>
+                        <div style="text-align: center;"><span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">Power Users</span><strong>${team.powerUsers}</strong></div>
+                        <div style="text-align: center;"><span style="font-size: 0.75rem; color: var(--text-secondary); display: block;">Actions/User</span><strong>${team.actionsPerUser.toFixed(1)}</strong></div>
+                        <div style="text-align: right;">
+                            <span class="leaderboard-value">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo</span>
                             <span class="leaderboard-subvalue">${team.weeklyHours.toFixed(0)} hrs/week</span>
                         </div>
                     </div>

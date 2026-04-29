@@ -1369,7 +1369,7 @@ async function exportToPDF() {
         const isVisible = (el) => el.offsetHeight > 0 && getComputedStyle(el).display !== 'none';
 
         // ── Gather top-level sections as whole units ──
-        // Each <details> section is captured as one image. This preserves visual cohesion.
+        // Each <details> section is captured as one image to preserve visual cohesion.
         const sections = Array.from(container.children).filter(isVisible);
         const totalSections = sections.length;
 
@@ -1384,11 +1384,11 @@ async function exportToPDF() {
         }
 
         function sliceAndPlace(canvas) {
-            // Content taller than one page — slice cleanly
+            // Content taller than one page — slice cleanly across pages
             const pxPerMm = canvas.width / UW;
             let srcY = 0;
             while (srcY < canvas.height) {
-                if (y >= PH - M - 5) addPage();
+                if (y >= PH - M - 2) addPage();
                 const availMm = (PH - M) - y;
                 const slicePx = Math.min(Math.floor(availMm * pxPerMm), canvas.height - srcY);
                 const sliceMm = slicePx / pxPerMm;
@@ -1410,21 +1410,12 @@ async function exportToPDF() {
             const h = mmH(canvas);
 
             if (h <= UH) {
-                // Section fits on one page — keep it whole, never split
+                // Section fits on one page — place it, pack greedily
                 if (y + h > PH - M) addPage();
                 placeImage(canvas, h);
-            } else if (h <= UH * 1.3) {
-                // Section slightly too tall — give it a fresh page, scale to fit
-                addPage();
-                // Scale down to fit the page
-                const scale = UH / h;
-                const scaledW = UW * scale;
-                const xOffset = M + (UW - scaledW) / 2;
-                pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', xOffset, y, scaledW, UH);
-                y += UH + GAP;
             } else {
-                // Section significantly taller than a page (big table, glossary) — slice it
-                if (y > M + 5) addPage();
+                // Section taller than a page — start fresh and slice across pages
+                if (y > M + 2) addPage();
                 sliceAndPlace(canvas);
                 y += GAP;
             }

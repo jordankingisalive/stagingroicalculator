@@ -1297,7 +1297,8 @@ function renderResults() {
             </table>
             `)}<!-- end Glossary -->
 
-            <div style="text-align: center; margin-top: 2rem;">
+            <div style="text-align: center; margin-top: 2rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+                <button class="btn-primary" onclick="exportToPDF()" style="background: linear-gradient(135deg, #4A9EF7, #A855F7);">Export to PDF</button>
                 <button class="btn-primary" onclick="location.reload()">Analyze Another File</button>
             </div>
         </div>
@@ -1309,6 +1310,11 @@ function renderResults() {
 
     // Initialize table sorting after rendering
     initTableSorting();
+}
+
+// Export results to PDF using browser print dialog
+function exportToPDF() {
+    window.print();
 }
 
 // Initialize table sorting functionality

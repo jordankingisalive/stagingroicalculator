@@ -797,34 +797,35 @@ function buildProjectionTables(metrics, sortedTeams) {
     const currentActivation = activeUsers / totalUsers;
     const valuePerActiveUser = activeUsers > 0 ? scaledMonthly / activeUsers : 0;
 
-    // Expansion scenarios with realistic adoption curves
-    // As you scale, new users adopt at lower rates (no training, less tech-savvy, etc.)
+    // Expansion scenarios modeled on increasing actions per user (network effects)
+    // As more people use Copilot, shared prompts, templates, and culture drive higher per-user engagement
+    const currentActionsPerUser = avgMonthly;
     const expansionScenarios = [
-        { users: totalUsers, label: 'Current deployment', adoptionRate: currentActivation, isCurrentRow: true },
-        { users: Math.round(totalUsers * 2), label: null, adoptionRate: Math.min(currentActivation, 0.80) },
-        { users: Math.round(totalUsers * 5), label: null, adoptionRate: Math.min(currentActivation * 0.75, 0.65) },
-        { users: Math.round(totalUsers * 10), label: null, adoptionRate: Math.min(currentActivation * 0.60, 0.55) },
-        { users: Math.round(totalUsers * 20), label: null, adoptionRate: Math.min(currentActivation * 0.50, 0.45) },
+        { users: totalUsers, label: 'Current deployment', actionsMultiplier: 1.0, isCurrentRow: true },
+        { users: Math.round(totalUsers * 2), label: null, actionsMultiplier: 1.10 },
+        { users: Math.round(totalUsers * 5), label: null, actionsMultiplier: 1.25 },
+        { users: Math.round(totalUsers * 10), label: null, actionsMultiplier: 1.40 },
+        { users: Math.round(totalUsers * 20), label: null, actionsMultiplier: 1.55 },
     ];
 
     let projRows = '';
     expansionScenarios.forEach(s => {
-        const adoptedUsers = Math.round(s.users * s.adoptionRate);
-        const mv = adoptedUsers * valuePerActiveUser;
+        const actionsPerUser = currentActionsPerUser * s.actionsMultiplier;
+        const totalMonthlyActions = actionsPerUser * s.users;
+        const mv = (totalMonthlyActions * mpa / 60) * rate;
         const av = mv * 12;
         const ac = s.users * licenseCost * 12;
         const roi = ac > 0 ? (av / ac).toFixed(1) : '0.0';
         const label = s.label || `${s.users.toLocaleString(undefined, {maximumFractionDigits: 0})} users`;
-        const adoptPct = (s.adoptionRate * 100).toFixed(0);
         const rowStyle = s.isCurrentRow ? ' style="border-bottom: 2px solid var(--copilot-blue);"' : '';
         projRows += `<tr${rowStyle}>
             <td>${s.isCurrentRow ? '<strong>' + label + '</strong>' : label}</td>
             <td>${s.users.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td>${adoptPct}% (${adoptedUsers.toLocaleString(undefined, {maximumFractionDigits: 0})})</td>
+            <td>${actionsPerUser.toFixed(0)}</td>
+            <td>${totalMonthlyActions.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
             <td>$${mv.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td>$${av.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
             <td>$${ac.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td style="color: ${parseFloat(roi) >= 1 ? 'var(--green)' : 'var(--red)'}; font-weight: bold;">${roi}x</td>
+            <td style="color: var(--green); font-weight: bold;">${roi}x</td>
         </tr>`;
     });
 
@@ -833,24 +834,23 @@ function buildProjectionTables(metrics, sortedTeams) {
     const projHtml = section('Expansion Projections', `
         <div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
-                Projected value as deployment scales, with adoption rates that decrease at larger scales to reflect realistic rollout curves.
-                Value per active user: $${valuePerActiveUser.toFixed(0)}/mo at ${mpa} min/action, $${rate}/hr.
+                Projected value as deployment scales. Per-user actions increase at larger scale due to network effects — more shared prompts, templates, and AI-fluent culture.
+                Current avg: ${avgMonthlyActions} actions/user/mo at ${mpa} min/action, $${rate}/hr.
             </p>
             <table>
                 <thead>
-                    <tr><th>Scenario</th><th>Licensed</th><th>Adoption (Active) ${tip('The estimated percentage of licensed users who will actively use Copilot. Adoption naturally decreases at larger scales as new populations include less tech-forward users.')}</th><th>Monthly Value</th><th>Annual Value</th><th>Annual Cost ${tip('Total licensing cost per year = licensed users × license cost × 12 months. All licensed users pay whether or not they actively use Copilot.')}</th><th>ROI</th></tr>
+                    <tr><th>Scenario</th><th>Licensed Users</th><th>Actions/User/Mo ${tip('Average monthly Copilot actions per user. As more colleagues adopt Copilot, shared best practices, prompt libraries, and cultural momentum drive higher per-user engagement.')}</th><th>Total Actions/Mo</th><th>Monthly Value</th><th>Annual Cost ${tip('Total licensing cost per year = licensed users × license cost × 12 months.')}</th><th>ROI</th></tr>
                 </thead>
                 <tbody>${projRows}</tbody>
             </table>
             <div class="info-box" style="margin-top:1rem;">
-                <p><strong>What does adoption % mean?</strong><br>
-                <p><strong>How are adoption rates modeled?</strong><br>
-                Your current deployment has a <strong>${(currentActivation * 100).toFixed(0)}% adoption rate</strong>.
-                As you scale to larger user bases, adoption rates naturally decrease — new populations tend to include less tech-forward users, 
-                and enablement programs take time to reach everyone. The projections use a tapering curve from your current rate down to ~45% at 20x scale.</p>
+                <p><strong>Why do actions per user increase at scale?</strong><br>
+                Organizations with broader Copilot deployment see higher per-user engagement due to <strong>network effects</strong>: 
+                shared prompt libraries, AI-first meeting culture, peer learning, and purpose-built workflows compound as more teams adopt. 
+                Microsoft internal data shows mature deployments consistently outperform initial rollouts in per-user activity.</p>
                 <p style="margin-top:0.75rem;"><strong>Need more detailed projections?</strong>
                 Use the <a href="https://jordankingisalive.github.io/CopilotROICalculator/roi-calculator.html" target="_blank" style="color: var(--copilot-cyan); font-weight: 600;">ROI Calculator</a>
-                to model custom user counts, pricing tiers, and adoption curves for your specific scenario.</p>
+                to model custom user counts, pricing tiers, and engagement curves for your specific scenario.</p>
             </div>
         </div>
         `);

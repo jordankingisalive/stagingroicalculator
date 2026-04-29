@@ -1112,9 +1112,9 @@ function renderResults() {
 
             <div class="metrics-grid">
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">WAU (Weekly Active Users) ${tip('The number of unique users who performed at least one Copilot action in the most recent week.')}</span></div>
-                    <div class="metric-value">${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                    <div class="metric-sublabel">${(metrics.totalActiveUsers / metrics.totalEnabledUsers * 100).toFixed(1)}% of ${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} licensed</div>
+                    <div class="metric-label"><span class="metric-label-row">Weekly Actions per User ${tip('The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.')}</span></div>
+                    <div class="metric-value">${metrics.avgActionsPerUser.toFixed(1)}</div>
+                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} total across ${metrics.totalActiveUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} users</div>
                 </div>
 
                 <div class="metric-card">
@@ -1292,7 +1292,7 @@ function renderResults() {
                     <tr><td><strong>Super User Rate</strong></td><td>The percentage of all licensed users classified as Super Users.</td></tr>
                     <tr><td><strong>Super Usage Report</strong></td><td>A Power BI report (<a href="https://aka.ms/decodingsuperusage" target="_blank" style="color:var(--copilot-cyan);">aka.ms/decodingsuperusage</a>) that provides a heatmap view of Copilot usage across your organization, broken out by team/division.</td></tr>
                     <tr><td><strong>Usage Tier</strong></td><td>A percentile band (Top 10%, 75-90%, etc.) that groups teams by their average Copilot actions per user, helping identify champions and teams that need enablement.</td></tr>
-                    <tr><td><strong>WAU (Weekly Active Users)</strong></td><td>The count of unique users who performed at least one Copilot action in the most recent week.</td></tr>
+                    <tr><td><strong>Weekly Actions per User</strong></td><td>The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.</td></tr>
                 </tbody>
             </table>
             `)}<!-- end Glossary -->

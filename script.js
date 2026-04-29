@@ -5,6 +5,12 @@ let resultsDisplayed = false;
 const fmt2 = (n) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 // Tooltip helper — returns inline HTML for a hover ? icon with explanation
 const tip = (text) => `<span class="info-tip"><span class="info-icon">?</span><span class="tip-text">${text}</span></span>`;
+// Collapsible section wrapper — renders as <details open> so user can collapse before PDF export
+const section = (title, content, extraClass = '') => `
+<details open class="collapsible-section ${extraClass}">
+    <summary class="section-toggle"><span class="toggle-chevron">▾</span> ${title}</summary>
+    <div class="section-body">${content}</div>
+</details>`;
 let config = {
     licenseCost: 30,
     professionalRate: 78,
@@ -693,9 +699,11 @@ function buildProjectionTables(metrics, sortedTeams) {
         return `<tr><td><strong>${label}</strong></td>${cells}</tr>`;
     };
 
-    const breakEvenHtml = `
-        <div class="roi-table-container">
-            <h2>Break-Even & ROI Thresholds ${tip('Shows how many Copilot actions per user per month are needed to break even on the license cost at different price points. If users do more than this many actions, the license pays for itself.')}</h2>
+    const breakEvenHtml = section('Break-Even & ROI Thresholds', `
+        <div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
+            <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
+                Shows how many Copilot actions per user per month are needed to break even on the license cost at different price points.
+            </p>
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
                 Actions per user per month required to reach each ROI target
                 (at ${mpa} min/action, $${rate}/hr)
@@ -720,7 +728,8 @@ function buildProjectionTables(metrics, sortedTeams) {
                 ${avgMonthly > parseFloat(be(licenseCost)) ? 'exceeds' : 'is below'} break-even
                 (${be(licenseCost)} actions) at the current $${licenseCost}/user/month rate.</p>
             </div>
-        </div>`;
+        </div>
+        `);
 
     // ---- USAGE TIER DISTRIBUTION ----
     // Sort teams by actions per user, split into super user report tiers
@@ -769,9 +778,8 @@ function buildProjectionTables(metrics, sortedTeams) {
         <td style="color: var(--green);">${metrics.roiMultiple.toFixed(1)}x</td>
     </tr>`;
 
-    const tierHtml = `
-        <div class="roi-table-container">
-            <h2>Usage Tier Value Distribution</h2>
+    const tierHtml = section('Usage Tier Value Distribution', `
+        <div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
                 ${uploadedData.groupLabel || 'Teams'} segmented into performance tiers by Copilot actions per user.
                 Investment at $${licenseCost}/user/month.<br>
@@ -783,7 +791,8 @@ function buildProjectionTables(metrics, sortedTeams) {
                 </thead>
                 <tbody>${tierRows}</tbody>
             </table>
-        </div>`;
+        </div>
+        `);
 
     // ---- EXPANSION PROJECTION TABLE ----
     const scaledMonthly = metrics.valuePerMonth;
@@ -825,9 +834,8 @@ function buildProjectionTables(metrics, sortedTeams) {
 
     const avgMonthlyActions = avgMonthly.toFixed(0);
 
-    const projHtml = `
-        <div class="roi-table-container">
-            <h2>Expansion Projections</h2>
+    const projHtml = section('Expansion Projections', `
+        <div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
                 Projected value as deployment scales, with adoption rates that decrease at larger scales to reflect realistic rollout curves.
                 Value per active user: $${valuePerActiveUser.toFixed(0)}/mo at ${mpa} min/action, $${rate}/hr.
@@ -848,7 +856,8 @@ function buildProjectionTables(metrics, sortedTeams) {
                 Use the <a href="https://jordankingisalive.github.io/CopilotROICalculator/roi-calculator.html" target="_blank" style="color: var(--copilot-cyan); font-weight: 600;">ROI Calculator</a>
                 to model custom user counts, pricing tiers, and adoption curves for your specific scenario.</p>
             </div>
-        </div>`;
+        </div>
+        `);
 
     // ---- UNLICENSED USER OPPORTUNITY COST ----
     const avgValuePerActiveUser = activeUsers > 0 ? metrics.valuePerMonth / activeUsers : 0;
@@ -856,9 +865,8 @@ function buildProjectionTables(metrics, sortedTeams) {
     const unlicensedActionsPerMonth = avgMonthly * unlicensedUsageFactor;
     const valuePerUnlicensedUser = avgValuePerActiveUser * unlicensedUsageFactor;
 
-    const opportunityHtml = `
-        <div class="roi-table-container">
-            <h2>Unlicensed User Opportunity Cost</h2>
+    const opportunityHtml = section('Unlicensed User Opportunity Cost', `
+        <div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
                 Estimated productivity left on the table for employees without a Copilot license.<br>
                 Assumes unlicensed users would adopt at <strong>10%</strong> of the current licensed-user average.
@@ -914,7 +922,8 @@ function buildProjectionTables(metrics, sortedTeams) {
                 (~${unlicensedActionsPerMonth.toFixed(0)} actions/user/month, worth $${valuePerUnlicensedUser.toFixed(0)}/user/month),
                 reflecting minimal initial adoption with no training or enablement.</p>
             </div>
-        </div>`;
+        </div>
+        `);
 
     // Store opportunity cost params globally so the slider/toggle can recalculate
     window._oppParams = {
@@ -1057,7 +1066,7 @@ function renderResults() {
             </div>
             ` : ''}
 
-            <div class="metrics-grid">
+            ${section('Key Metrics', `<div class="metrics-grid">
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Enabled Users <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The total number of people in your organization who have been assigned a Microsoft 365 Copilot license.</span></span></span></div>
                     <div class="metric-value">${metrics.totalEnabledUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
@@ -1108,9 +1117,9 @@ function renderResults() {
                     <div class="metric-sublabel">$${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}/wk × 4.33 = ${metrics.roiMultiple.toFixed(1)}x ROI</div>
                 </div>
             </div>
+            `)}<!-- end Key Metrics -->
 
-            <div class="roi-table-container">
-                <h2>Productivity ROI Calculation</h2>
+            ${section('Productivity ROI Calculation', `<div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
                 <table>
                     <thead>
                         <tr>
@@ -1153,9 +1162,9 @@ function renderResults() {
                     </tbody>
                 </table>
             </div>
+            `)}<!-- end Productivity ROI -->
 
-            <div class="leaderboard-container">
-                <h2>Top 10 by Value Generated</h2>
+            ${section('Top 10 by Value Generated', `<div class="leaderboard-container" style="box-shadow:none;border:none;padding:0;margin:0;">
                 <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
                 ${sortedTeams.slice(0, 10).map((team, index) => `
                     <div class="leaderboard-item" style="display: grid; grid-template-columns: 40px 1.5fr repeat(4, 1fr) auto; align-items: center; gap: 0.5rem;">
@@ -1172,9 +1181,9 @@ function renderResults() {
                     </div>
                 `).join('')}
             </div>
+            `)}<!-- end Top 10 -->
 
-            <div class="leaderboard-container">
-                <h2>All ${uploadedData.groupLabel || 'Teams'} Performance</h2>
+            ${section('All ' + (uploadedData.groupLabel || 'Teams') + ' Performance', `<div class="leaderboard-container" style="box-shadow:none;border:none;padding:0;margin:0;">
                 <table id="teamsTable" class="sortable-table">
                     <thead>
                         <tr>
@@ -1225,10 +1234,11 @@ function renderResults() {
                     </tbody>
                 </table>
             </div>
+            `)}<!-- end All Teams -->
 
             ${buildProjectionTables(metrics, sortedTeams)}
 
-            <div class="info-box" style="margin-top: 2rem;">
+            ${section('Calculation Methodology', `<div class="info-box" style="margin-top: 0;">
                 <strong>Calculation Methodology</strong>
                 <p>
                     • <strong>Time savings:</strong> ${metrics.minsPerAction} minutes saved per Copilot action (adjustable 1-15 min)<br>
@@ -1239,6 +1249,7 @@ function renderResults() {
                     • All data processed locally in your browser - no data transmitted to servers
                 </p>
             </div>
+            `)}<!-- end Methodology -->
 
             <div style="text-align: center; margin-top: 2rem;">
                 <button class="btn-primary" onclick="location.reload()">Analyze Another File</button>

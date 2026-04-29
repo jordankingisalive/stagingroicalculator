@@ -697,6 +697,74 @@ tr:hover {
     margin-left: 1rem;
 }
 
+/* Collapsible Sections */
+.collapsible-section {
+    background: var(--surface);
+    border-radius: 16px;
+    box-shadow: 0 4px 24px var(--shadow);
+    border: 1px solid var(--border);
+    margin-bottom: 2rem;
+    overflow: hidden;
+}
+
+.section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--copilot-blue);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    transition: background 0.2s ease;
+}
+
+.section-toggle::-webkit-details-marker { display: none; }
+
+.section-toggle:hover {
+    background: rgba(74, 158, 247, 0.06);
+}
+
+.toggle-chevron {
+    display: inline-block;
+    transition: transform 0.25s ease;
+    font-size: 1.1rem;
+}
+
+details.collapsible-section:not([open]) .toggle-chevron {
+    transform: rotate(-90deg);
+}
+
+.section-body {
+    padding: 0 1.5rem 1.5rem;
+}
+
+/* Remove double-boxing when roi-table-container / leaderboard-container is inside a collapsible */
+.collapsible-section .roi-table-container,
+.collapsible-section .leaderboard-container {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+/* Print: respect collapsed state */
+@media print {
+    details.collapsible-section:not([open]) .section-body {
+        display: none !important;
+    }
+    .section-toggle {
+        page-break-after: avoid;
+    }
+    .toggle-chevron {
+        display: none;
+    }
+}
+
 /* Footer */
 footer {
     text-align: center;

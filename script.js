@@ -1048,14 +1048,20 @@ function renderResults() {
                 </div>
 
                 <div class="metric-card">
+                    <div class="metric-label"><span class="metric-label-row">Power User Rate <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The percentage of users who are heavy Copilot adopters — using it frequently and across multiple features. This measures depth of adoption, not just whether someone tried it once.</span></span></span></div>
+                    <div class="metric-value">${metrics.powerUserRate.toFixed(1)}%</div>
+                    <div class="metric-sublabel">${metrics.powerUsers.toLocaleString(undefined, {maximumFractionDigits: 0})} power users</div>
+                </div>
+
+                <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Weekly Actions per User <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.</span></span></span></div>
                     <div class="metric-value">${metrics.avgActionsPerUser.toFixed(1)}</div>
-                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})} total/week</div>
+                    <div class="metric-sublabel">${metrics.totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} total/week</div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Weekly Hours Saved <span class="info-tip"><span class="info-icon">?</span><span class="tip-text">Estimated time saved per week across all users. Calculated by multiplying total weekly Copilot actions by the configured minutes saved per action, then converting to hours.</span></span></span></div>
-                    <div class="metric-value">${metrics.weeklyHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                    <div class="metric-value">${metrics.weeklyHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                     <div class="metric-sublabel">Conservative estimate</div>
                 </div>
             </div>

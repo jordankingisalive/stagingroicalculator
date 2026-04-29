@@ -476,13 +476,16 @@ header h1 {
 }
 
 .metric-value {
-    font-size: 2.5rem;
+    font-size: clamp(1.4rem, 4vw, 2.5rem);
     font-weight: bold;
     background: linear-gradient(135deg, var(--copilot-cyan), var(--copilot-blue));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     margin: 0.5rem 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .metric-label {

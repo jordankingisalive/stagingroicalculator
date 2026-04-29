@@ -221,10 +221,65 @@
 
     <script src="script.js?v=6"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body.pdf-exporting,
+        body.pdf-exporting .container,
+        body.pdf-exporting .phase-card,
+        body.pdf-exporting .month-card,
+        body.pdf-exporting .insight-card,
+        body.pdf-exporting .scenario-card,
+        body.pdf-exporting .metric-card,
+        body.pdf-exporting details,
+        body.pdf-exporting summary,
+        body.pdf-exporting section,
+        body.pdf-exporting main,
+        body.pdf-exporting header,
+        body.pdf-exporting nav,
+        body.pdf-exporting div {
+            background: #ffffff !important;
+            background-image: none !important;
+            color: #1a1a1a !important;
+            border-color: #d0d0d0 !important;
+            box-shadow: none !important;
+        }
+        body.pdf-exporting h1,
+        body.pdf-exporting h2,
+        body.pdf-exporting h3,
+        body.pdf-exporting h4,
+        body.pdf-exporting h5 {
+            color: #1a3a6b !important;
+            background: none !important;
+            -webkit-background-clip: unset !important;
+            background-clip: unset !important;
+            -webkit-text-fill-color: #1a3a6b !important;
+        }
+        body.pdf-exporting p,
+        body.pdf-exporting span,
+        body.pdf-exporting li,
+        body.pdf-exporting td,
+        body.pdf-exporting th,
+        body.pdf-exporting label {
+            color: #333333 !important;
+            -webkit-text-fill-color: #333333 !important;
+        }
+        body.pdf-exporting a,
+        body.pdf-exporting .nav-btn {
+            color: #2563eb !important;
+            -webkit-text-fill-color: #2563eb !important;
+        }
+        body.pdf-exporting input,
+        body.pdf-exporting select {
+            background: #f8f8f8 !important;
+            color: #1a1a1a !important;
+            border-color: #ccc !important;
+        }
+    </style>
     <script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@3.12.0/dist/pptxgen.bundle.js"></script>
     <script>
         function exportToPDF() {
             const element = document.querySelector('.container');
+            document.body.classList.add('pdf-exporting');
+
             const opt = {
                 margin: 0.5,
                 filename: 'M365_Copilot_ROI_Analysis.pdf',
@@ -232,7 +287,8 @@
                 html2canvas: {
                     scale: 2,
                     useCORS: true,
-                    logging: false
+                    logging: false,
+                    backgroundColor: '#ffffff'
                 },
                 jsPDF: {
                     unit: 'in',
@@ -245,7 +301,11 @@
                 }
             };
 
-            html2pdf().set(opt).from(element).save();
+            html2pdf().set(opt).from(element).save().then(() => {
+                document.body.classList.remove('pdf-exporting');
+            }).catch(() => {
+                document.body.classList.remove('pdf-exporting');
+            });
         }
 
         function emailReport() {

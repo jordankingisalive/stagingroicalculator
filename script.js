@@ -4,7 +4,7 @@ let resultsDisplayed = false;
 // Format number with max 2 decimal places
 const fmt2 = (n) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 let config = {
-    licenseCost: 32,
+    licenseCost: 30,
     professionalRate: 78,
     minutesPerAction: 6,
     analysisWeeks: 26,

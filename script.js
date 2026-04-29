@@ -479,7 +479,33 @@ function flattenData(rows) {
                 actionsPerUser: parseNumber(item.row[mapping.totalActions] || 0)
             }));
 
-            aggregatedRows.push(rowsWithDates[0].row);
+            // Build an averaged row across all weeks instead of just using the latest
+            const latestRow = { ...rowsWithDates[0].row };
+
+            // Average the % Active Users across all weeks
+            if (mapping.activeUsersPercent) {
+                const activePercents = rowsWithDates
+                    .map(item => parseNumber(item.row[mapping.activeUsersPercent] || 0))
+                    .filter(p => p > 0);
+                if (activePercents.length > 0) {
+                    const avgActivePercent = activePercents.reduce((a, b) => a + b, 0) / activePercents.length;
+                    latestRow[mapping.activeUsersPercent] = avgActivePercent.toFixed(1) + '%';
+                }
+            }
+
+            // Average the actions per user across all weeks
+            if (mapping.totalActions) {
+                const actions = rowsWithDates
+                    .map(item => parseNumber(item.row[mapping.totalActions] || 0))
+                    .filter(a => a > 0);
+                if (actions.length > 0) {
+                    const avgActions = actions.reduce((a, b) => a + b, 0) / actions.length;
+                    latestRow[mapping.totalActions] = avgActions.toFixed(1);
+                }
+            }
+
+            // Use the latest week's enabled users (most current headcount)
+            aggregatedRows.push(latestRow);
         }
 
         console.log(`Aggregated ${rows.length} rows into ${aggregatedRows.length} organizations`);

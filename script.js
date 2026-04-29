@@ -741,6 +741,7 @@ function computeTeamsForPeriod(period) {
         const activePercent = avg(filtered.map(w => w.activePercent).filter(v => v > 0));
         const actionsPerUser = avg(filtered.map(w => w.actionsPerUser).filter(v => v > 0));
         const powerPercent = avg(filtered.map(w => w.powerPercent).filter(v => v > 0));
+        const activeDays = avg(filtered.map(w => w.activeDays).filter(v => v > 0));
 
         const activeUsers = Math.round((enabledUsers * activePercent) / 100);
         const weeklyActions = actionsPerUser * activeUsers;
@@ -768,6 +769,7 @@ function computeTeamsForPeriod(period) {
             powerUsers: powerUsersCount,
             monthlyValue,
             weeklyHours,
+            engagement: activeDays,
             peakWeek,
             peakActionsPerUser
         };
@@ -862,6 +864,7 @@ function switchTimePeriod(period) {
                 <td>${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                 <td>${team.powerUsers}</td>
                 <td>${team.actionsPerUser.toFixed(1)}</td>
+                <td>${(team.engagement || 0).toFixed(1)}</td>
                 <td style="color: var(--green); font-weight: 700;">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                 <td>${team.weeklyHours.toFixed(0)}</td>
             </tr>`).join('');
@@ -881,6 +884,7 @@ function switchTimePeriod(period) {
                 <td data-value="${team.powerUsers}">${team.powerUsers}</td>
                 <td data-value="${team.weeklyActions}">${team.weeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                 <td data-value="${team.actionsPerUser}">${team.actionsPerUser.toFixed(1)}</td>
+                <td data-value="${team.engagement || 0}">${(team.engagement || 0).toFixed(1)}</td>
                 <td data-value="${team.peakWeek ? team.peakWeek.getTime() : 0}">${peakWeekDisplay}</td>
                 <td data-value="${team.weeklyHours}">${team.weeklyHours.toFixed(0)}</td>
                 <td data-value="${team.monthlyValue}"><strong>$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong></td>
@@ -1292,6 +1296,7 @@ function renderResults() {
                 <h1>M365 Copilot Productivity ROI Analysis Results</h1>
                 <p class="subtitle">Based on ${rows.length} ${uploadedData.groupLabel || 'teams'} • ${config.analysisWeeks} weeks of data${uploadedData.dateRange ? ` (${uploadedData.dateRange})` : ''}</p>
                 <p style="margin-top: 0.5rem;"><a href="https://aka.ms/Analytics-Hub" target="_blank" style="color: var(--copilot-cyan); font-weight: 600; text-decoration: none; font-size: 0.95rem;">📊 View more reports on the Analytics Hub →</a></p>
+                <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary); font-style: italic;">⛶ This report is best viewed in full screen. Tooltips may not appear unless the browser window is maximized.</p>
             </header>
 
             ${showRecap ? `
@@ -1422,7 +1427,7 @@ function renderResults() {
                 </div>` : ''}
                 <table>
                     <thead>
-                        <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span></th><th>Power Users<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span></th><th>Actions/User<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span></th><th>Monthly Value<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">projected</span></th><th>Hrs/Week<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg</span></th></tr>
+                        <tr><th>#</th><th>${uploadedData.groupLabel || 'Team'}</th><th>Active Users<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span></th><th>Power Users<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span></th><th>Actions/User<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span></th><th>Active Days<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span></th><th>Monthly Value<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">projected</span></th><th>Hrs/Week<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg</span></th></tr>
                     </thead>
                     <tbody id="top10Body">
                         ${sortedTeams.slice(0, 10).map((team, index) => `
@@ -1432,6 +1437,7 @@ function renderResults() {
                             <td>${team.activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                             <td>${team.powerUsers}</td>
                             <td>${team.actionsPerUser.toFixed(1)}</td>
+                            <td>${(team.engagement || 0).toFixed(1)}</td>
                             <td style="color: var(--green); font-weight: 700;">$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                             <td>${team.weeklyHours.toFixed(0)}</td>
                         </tr>`).join('')}
@@ -1469,6 +1475,9 @@ function renderResults() {
                             <th class="sortable" data-column="actionsPerUser" data-type="number">
                                 Actions/User<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span> <span class="sort-icon"></span>
                             </th>
+                            <th class="sortable" data-column="activeDays" data-type="number">
+                                Active Days<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span> <span class="sort-icon"></span>
+                            </th>
                             <th class="sortable" data-column="peakWeek" data-type="date">
                                 Peak Performance Week<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">best single week</span> <span class="sort-icon"></span>
                             </th>
@@ -1493,6 +1502,7 @@ function renderResults() {
                                 <td data-value="${team.powerUsers}">${team.powerUsers}</td>
                                 <td data-value="${team.weeklyActions}">${team.weeklyActions.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                                 <td data-value="${team.actionsPerUser}">${team.actionsPerUser.toFixed(1)}</td>
+                                <td data-value="${team.engagement || 0}">${(team.engagement || 0).toFixed(1)}</td>
                                 <td data-value="${team.peakWeek ? team.peakWeek.getTime() : 0}">${peakWeekDisplay}</td>
                                 <td data-value="${team.weeklyHours}">${team.weeklyHours.toFixed(0)}</td>
                                 <td data-value="${team.monthlyValue}"><strong>$${team.monthlyValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</strong></td>

@@ -1312,7 +1312,7 @@ function renderResults() {
     initTableSorting();
 }
 
-// Export results to a styled PDF with smart pagination
+// Export results to a polished PDF with proper pagination
 async function exportToPDF() {
     const container = document.querySelector('.results-container');
     if (!container) return;
@@ -1334,8 +1334,7 @@ async function exportToPDF() {
     container.style.width = '900px';
     container.style.maxWidth = '900px';
 
-    // Fix gradient-text rendering: html2canvas can't do background-clip:text,
-    // so swap to solid cyan color during capture
+    // Fix gradient-text rendering: html2canvas can't render background-clip:text
     const gradientEls = container.querySelectorAll('.metric-value');
     gradientEls.forEach(el => {
         el.dataset.origCss = el.getAttribute('style') || '';
@@ -1360,92 +1359,73 @@ async function exportToPDF() {
         }
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
-        const PW = 210, PH = 297, M = 8, GAP = 2;
+        const PW = 210, PH = 297, M = 10, GAP = 3;
         const UW = PW - 2 * M;
         const UH = PH - 2 * M;
 
-        const h2cOpts = { scale: 1.5, useCORS: true, backgroundColor: '#0B1120', logging: false, windowWidth: 920 };
+        const h2cOpts = { scale: 2, useCORS: true, backgroundColor: '#0B1120', logging: false, windowWidth: 920 };
         const capture = (el) => html2canvas(el, h2cOpts);
         const mmH = (c) => (c.height * UW) / c.width;
         const isVisible = (el) => el.offsetHeight > 0 && getComputedStyle(el).display !== 'none';
 
-        // ── Phase 1: Build list of atomic blocks ──
-        // Break collapsible sections into their body's direct children so each
-        // block is small enough to fit on one page (except the big team table).
-        const targets = []; // { el, sectionStart }
-        const topChildren = Array.from(container.children).filter(isVisible);
+        // ── Gather top-level sections as whole units ──
+        // Each <details> section is captured as one image. This preserves visual cohesion.
+        const sections = Array.from(container.children).filter(isVisible);
+        const totalSections = sections.length;
 
-        for (const child of topChildren) {
-            const isDetails = child.tagName === 'DETAILS';
-            if (isDetails) {
-                const summary = child.querySelector(':scope > summary');
-                const body = child.querySelector(':scope > .section-body');
-                if (summary && body) {
-                    targets.push({ el: summary, sectionStart: true });
-                    const subs = Array.from(body.children).filter(isVisible);
-                    subs.forEach(s => targets.push({ el: s, sectionStart: false }));
-                } else {
-                    targets.push({ el: child, sectionStart: true });
-                }
-            } else {
-                targets.push({ el: child, sectionStart: false });
-            }
-        }
-
-        // ── Phase 2: Capture all blocks as canvases ──
-        const blocks = [];
-        for (let i = 0; i < targets.length; i++) {
-            if (btn) btn.textContent = `Generating PDF… ${Math.round((i / targets.length) * 85)}%`;
-            const canvas = await capture(targets[i].el);
-            blocks.push({ canvas, h: mmH(canvas), sectionStart: targets[i].sectionStart });
-        }
-
-        // ── Phase 3: Smart pagination ──
-        if (btn) btn.textContent = 'Generating PDF… 90%';
+        // ── Capture and place each section ──
         let y = M;
 
         function addPage() { pdf.addPage(); y = M; }
 
-        function placeBlock(canvas, h) {
-            pdf.addImage(canvas.toDataURL('image/jpeg', 0.90), 'JPEG', M, y, UW, h);
+        function placeImage(canvas, h) {
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', M, y, UW, h);
             y += h + GAP;
         }
 
-        function sliceBlock(canvas) {
-            // For content taller than a full page, slice it across pages
+        function sliceAndPlace(canvas) {
+            // Content taller than one page — slice cleanly
             const pxPerMm = canvas.width / UW;
             let srcY = 0;
             while (srcY < canvas.height) {
-                if (y >= PH - M) addPage();
+                if (y >= PH - M - 5) addPage();
                 const availMm = (PH - M) - y;
-                const slicePx = Math.min(availMm * pxPerMm, canvas.height - srcY);
+                const slicePx = Math.min(Math.floor(availMm * pxPerMm), canvas.height - srcY);
                 const sliceMm = slicePx / pxPerMm;
                 const slice = document.createElement('canvas');
                 slice.width = canvas.width;
-                slice.height = Math.ceil(slicePx);
+                slice.height = slicePx;
                 slice.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, slicePx, 0, 0, canvas.width, slicePx);
-                pdf.addImage(slice.toDataURL('image/jpeg', 0.90), 'JPEG', M, y, UW, sliceMm);
+                pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', M, y, UW, sliceMm);
                 srcY += slicePx;
                 y += sliceMm;
             }
         }
 
-        for (let i = 0; i < blocks.length; i++) {
-            const blk = blocks[i];
+        for (let i = 0; i < totalSections; i++) {
+            if (btn) btn.textContent = `Generating PDF… ${Math.round(((i + 1) / totalSections) * 100)}%`;
 
-            // For section titles: start a new page if less than 20% of the page remains
-            if (blk.sectionStart && y > M + UH * 0.8) {
+            const section = sections[i];
+            const canvas = await capture(section);
+            const h = mmH(canvas);
+
+            if (h <= UH) {
+                // Section fits on one page — keep it whole, never split
+                if (y + h > PH - M) addPage();
+                placeImage(canvas, h);
+            } else if (h <= UH * 1.3) {
+                // Section slightly too tall — give it a fresh page, scale to fit
                 addPage();
-            }
-
-            if (blk.h <= UH) {
-                // Block fits on one page — never split it
-                if (y + blk.h > PH - M) addPage();
-                placeBlock(blk.canvas, blk.h);
+                // Scale down to fit the page
+                const scale = UH / h;
+                const scaledW = UW * scale;
+                const xOffset = M + (UW - scaledW) / 2;
+                pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', xOffset, y, scaledW, UH);
+                y += UH + GAP;
             } else {
-                // Block taller than a full page (e.g. the big team table) — slice it
-                if (y > M + 1) addPage();
-                sliceBlock(blk.canvas);
+                // Section significantly taller than a page (big table, glossary) — slice it
+                if (y > M + 5) addPage();
+                sliceAndPlace(canvas);
                 y += GAP;
             }
         }

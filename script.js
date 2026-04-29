@@ -877,18 +877,22 @@ function buildProjectionTables(metrics, sortedTeams) {
                 <div class="metric-card">
                     <div class="metric-label">Licensing Cost / Mo</div>
                     <div class="metric-value" id="opp-licensing-cost">—</div>
+                    <div class="metric-sublabel" id="opp-licensing-math"></div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label" id="opp-value-label">Potential Value / Mo</div>
                     <div class="metric-value" id="opp-potential-value">—</div>
+                    <div class="metric-sublabel" id="opp-value-math"></div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">Net Gain / Mo</div>
                     <div class="metric-value" id="opp-net-gain">—</div>
+                    <div class="metric-sublabel" id="opp-net-math"></div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">Annual Opportunity</div>
                     <div class="metric-value" id="opp-annual">—</div>
+                    <div class="metric-sublabel" id="opp-annual-math"></div>
                 </div>
             </div>
 
@@ -931,22 +935,29 @@ function updateOppCost() {
     const annual = netGain * 12;
     const totalActions = p.actionsPerUser * count;
 
+    document.getElementById('opp-licensing-cost').textContent = '$' + fmt(licensingCost);
+    document.getElementById('opp-licensing-math').textContent = fmt(count) + ' users × $' + p.licenseCost + '/mo';
+
     if (p.view === 'value') {
-        document.getElementById('opp-licensing-cost').textContent = '$' + fmt(licensingCost);
         document.getElementById('opp-value-label').textContent = 'Potential Value / Mo';
         document.getElementById('opp-potential-value').textContent = '$' + fmt(potentialValue);
+        document.getElementById('opp-value-math').textContent = fmt(count) + ' × $' + fmt(Math.round(p.valuePerUser)) + '/user/mo';
         document.getElementById('opp-net-gain').textContent = '$' + fmt(netGain);
         document.getElementById('opp-net-gain').style.color = netGain >= 0 ? 'var(--green)' : 'var(--red)';
+        document.getElementById('opp-net-math').textContent = '$' + fmt(potentialValue) + ' − $' + fmt(licensingCost);
         document.getElementById('opp-annual').textContent = '$' + fmt(annual);
         document.getElementById('opp-annual').style.color = annual >= 0 ? 'var(--green)' : 'var(--red)';
+        document.getElementById('opp-annual-math').textContent = '$' + fmt(netGain) + ' × 12 months';
     } else {
-        document.getElementById('opp-licensing-cost').textContent = '$' + fmt(licensingCost);
         document.getElementById('opp-value-label').textContent = 'Total Actions / Mo';
         document.getElementById('opp-potential-value').textContent = fmt(totalActions);
-        document.getElementById('opp-net-gain').textContent = fmt(p.actionsPerUser) + '/user';
+        document.getElementById('opp-value-math').textContent = fmt(count) + ' × ' + fmt(Math.round(p.actionsPerUser)) + ' actions/user';
+        document.getElementById('opp-net-gain').textContent = fmt(Math.round(p.actionsPerUser)) + '/user';
         document.getElementById('opp-net-gain').style.color = '';
+        document.getElementById('opp-net-math').textContent = '10% of ' + fmt(Math.round(p.avgMonthly)) + ' avg actions';
         document.getElementById('opp-annual').textContent = fmt(totalActions * 12) + '/yr';
         document.getElementById('opp-annual').style.color = '';
+        document.getElementById('opp-annual-math').textContent = fmt(totalActions) + ' × 12 months';
     }
 }
 

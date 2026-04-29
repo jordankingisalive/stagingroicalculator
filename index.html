@@ -18,14 +18,6 @@
                     <p class="subtitle">Transform your usage data into actionable insights</p>
                 </div>
                 <div class="header-actions">
-                    <button onclick="exportToPDF()" class="action-btn" title="Export to PDF">
-                        <span class="action-icon">📄</span>
-                        <span class="action-text">Export PDF</span>
-                    </button>
-                    <button onclick="exportToPPTX()" class="action-btn" title="Export to PPTX">
-                        <span class="action-icon">📊</span>
-                        <span class="action-text">Export PPTX</span>
-                    </button>
                     <button onclick="emailReport()" class="action-btn" title="Share via Email">
                         <span class="action-icon">📧</span>
                         <span class="action-text">Email</span>
@@ -220,68 +212,7 @@
     </div>
 
     <script src="script.js?v=6"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@3.12.0/dist/pptxgen.bundle.js"></script>
     <script>
-        async function exportToPDF() {
-            const btn = event.target;
-            const origText = btn.textContent;
-            btn.textContent = 'Generating...';
-            btn.disabled = true;
-
-            try {
-                // Open all collapsed sections so they appear in the screenshot
-                const details = document.querySelectorAll('details:not([open])');
-                details.forEach(d => d.setAttribute('open', ''));
-
-                // Small delay to let browser reflow
-                await new Promise(r => setTimeout(r, 300));
-
-                const element = document.querySelector('.container');
-                const canvas = await html2canvas(element, {
-                    scale: 3,
-                    useCORS: true,
-                    logging: false,
-                    backgroundColor: null,
-                    removeContainer: true
-                });
-
-                const imgData = canvas.toDataURL('image/png');
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF('p', 'in', 'letter');
-
-                const pageW = 8.5;
-                const pageH = 11;
-                const margin = 0.35;
-                const usableW = pageW - margin * 2;
-                const usableH = pageH - margin * 2;
-
-                // Scale canvas to fit page width
-                const imgW = usableW;
-                const imgH = (canvas.height / canvas.width) * imgW;
-
-                // Tile the tall image across pages
-                let y = 0;
-                let page = 0;
-                while (y < imgH) {
-                    if (page > 0) pdf.addPage();
-                    // Use negative y offset to show the right slice of the image
-                    pdf.addImage(imgData, 'PNG', margin, margin - y, imgW, imgH);
-                    y += usableH;
-                    page++;
-                }
-
-                pdf.save('M365_Copilot_ROI_Analysis.pdf');
-            } catch (err) {
-                console.error('PDF export failed:', err);
-                alert('PDF export failed. Please try Print Report instead.');
-            } finally {
-                btn.textContent = origText;
-                btn.disabled = false;
-            }
-        }
-
         function emailReport() {
             const subject = encodeURIComponent('M365 Copilot Productivity ROI Analysis');
             const body = encodeURIComponent('Please find attached the M365 Copilot Productivity ROI analysis. This report provides insights into productivity gains and return on investment.\n\nTo view the full interactive report, please visit: [Your URL Here]');
@@ -297,60 +228,6 @@
             }
         }
 
-        function exportToPPTX() {
-            if (typeof PptxGenJS === 'undefined') { alert('PPTX library not loaded yet.'); return; }
-            const pptx = new PptxGenJS();
-            pptx.layout = 'LAYOUT_WIDE';
-            pptx.defineSlideMaster({ title: 'COPILOT', background: { color: '0B1120' } });
-            const white = 'F1F5F9', cyan = '00D4FF', blue = '4A9EF7';
-
-            // Slide 1 — Title
-            let slide = pptx.addSlide({ masterName: 'COPILOT' });
-            slide.addText('M365 Copilot\nProductivity ROI Analysis', { x: 0.5, y: 1.5, w: 12, h: 2.5, fontSize: 36, color: cyan, bold: true, align: 'center', fontFace: 'Segoe UI' });
-
-            // Slide 2 — Metric cards
-            const cards = document.querySelectorAll('.metric-card');
-            if (cards.length >= 4) {
-                slide = pptx.addSlide({ masterName: 'COPILOT' });
-                slide.addText('Key Metrics', { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 24, color: cyan, bold: true, fontFace: 'Segoe UI' });
-                const metrics = [];
-                cards.forEach(card => {
-                    const label = (card.querySelector('.metric-label') || {}).textContent || '';
-                    const value = (card.querySelector('.metric-value') || {}).textContent || '';
-                    if (label && value) metrics.push({ label: label.replace(/\?/g,'').trim(), value: value.trim() });
-                });
-                metrics.slice(0, 8).forEach((m, i) => {
-                    const col = i % 4, row = Math.floor(i / 4);
-                    const x = 0.4 + col * 3.1, y = 1.2 + row * 2.2;
-                    slide.addShape(pptx.ShapeType.roundRect, { x, y, w: 2.8, h: 1.8, fill: { color: '1E293B' }, rectRadius: 0.15, line: { color: '253449', width: 1 } });
-                    slide.addText(m.value, { x, y: y + 0.3, w: 2.8, h: 0.7, fontSize: 22, color: cyan, bold: true, align: 'center', fontFace: 'Segoe UI' });
-                    slide.addText(m.label, { x, y: y + 1.0, w: 2.8, h: 0.5, fontSize: 10, color: '94A3B8', align: 'center', fontFace: 'Segoe UI' });
-                });
-            }
-
-            // One slide per table section
-            document.querySelectorAll('.roi-table-container').forEach(container => {
-                const title = (container.querySelector('h2') || {}).textContent || 'Data';
-                const table = container.querySelector('table');
-                if (!table) return;
-                slide = pptx.addSlide({ masterName: 'COPILOT' });
-                slide.addText(title.replace(/\?/g,'').trim(), { x: 0.5, y: 0.2, w: 12, h: 0.5, fontSize: 20, color: cyan, bold: true, fontFace: 'Segoe UI' });
-                const tRows = [];
-                table.querySelectorAll('tr').forEach(tr => {
-                    const cells = [];
-                    tr.querySelectorAll('th, td').forEach(cell => {
-                        cells.push({ text: cell.textContent.replace(/\?/g,'').trim(), options: { fontSize: 8, color: cell.tagName === 'TH' ? blue : white, fill: { color: cell.tagName === 'TH' ? '1a2744' : '0B1120' }, fontFace: 'Segoe UI', border: { type: 'solid', pt: 0.5, color: '253449' } } });
-                    });
-                    if (cells.length) tRows.push(cells);
-                });
-                if (tRows.length) {
-                    const colW = 12.5 / (tRows[0].length || 1);
-                    slide.addTable(tRows, { x: 0.25, y: 0.8, w: 12.5, colW: Array(tRows[0].length).fill(colW), rowH: 0.35, autoPage: true, autoPageRepeatHeader: true });
-                }
-            });
-
-            pptx.writeFile({ fileName: 'M365_Copilot_ROI_Analysis.pptx' });
-        }
     </script>
 </body>
 </html>

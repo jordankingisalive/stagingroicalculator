@@ -1299,9 +1299,6 @@ function renderResults() {
 
             <div style="text-align: center; margin-top: 2rem;">
                 <button class="btn-primary" onclick="location.reload()">Analyze Another File</button>
-                <button class="btn-secondary" onclick="window.print()">Print Report</button>
-                <button class="btn-secondary" onclick="exportToPDF()">Export to PDF</button>
-                <button class="btn-secondary" onclick="exportToPPTX()">Export to PPTX</button>
             </div>
         </div>
     `;

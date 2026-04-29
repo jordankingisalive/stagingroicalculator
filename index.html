@@ -240,13 +240,14 @@
 
                 const element = document.querySelector('.container');
                 const canvas = await html2canvas(element, {
-                    scale: 2,
+                    scale: 3,
                     useCORS: true,
                     logging: false,
-                    backgroundColor: null  // preserve the dark background as-is
+                    backgroundColor: null,
+                    removeContainer: true
                 });
 
-                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                const imgData = canvas.toDataURL('image/png');
                 const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF('p', 'in', 'letter');
 
@@ -266,7 +267,7 @@
                 while (y < imgH) {
                     if (page > 0) pdf.addPage();
                     // Use negative y offset to show the right slice of the image
-                    pdf.addImage(imgData, 'JPEG', margin, margin - y, imgW, imgH);
+                    pdf.addImage(imgData, 'PNG', margin, margin - y, imgW, imgH);
                     y += usableH;
                     page++;
                 }

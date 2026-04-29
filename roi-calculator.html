@@ -1102,85 +1102,55 @@ function toggleRecapDisplay() {
 }
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <style id="pdf-print-theme">
-        /* Injected before PDF export to force light, print-friendly colours */
-        body.pdf-exporting,
-        body.pdf-exporting .container,
-        body.pdf-exporting .projection-form,
-        body.pdf-exporting .phase-card,
-        body.pdf-exporting .month-card,
-        body.pdf-exporting .insight-card,
-        body.pdf-exporting .scenario-card,
-        body.pdf-exporting .metric-card,
-        body.pdf-exporting .important-box-wrapper,
-        body.pdf-exporting details,
-        body.pdf-exporting summary,
-        body.pdf-exporting section,
-        body.pdf-exporting main,
-        body.pdf-exporting header,
-        body.pdf-exporting nav,
-        body.pdf-exporting div {
-            background: #ffffff !important;
-            background-image: none !important;
-            color: #1a1a1a !important;
-            border-color: #d0d0d0 !important;
-            box-shadow: none !important;
-        }
-        body.pdf-exporting h1,
-        body.pdf-exporting h2,
-        body.pdf-exporting h3,
-        body.pdf-exporting h4,
-        body.pdf-exporting h5 {
-            color: #1a3a6b !important;
-            background: none !important;
-            -webkit-background-clip: unset !important;
-            background-clip: unset !important;
-            -webkit-text-fill-color: #1a3a6b !important;
-        }
-        body.pdf-exporting p,
-        body.pdf-exporting span,
-        body.pdf-exporting li,
-        body.pdf-exporting td,
-        body.pdf-exporting th,
-        body.pdf-exporting label,
-        body.pdf-exporting .subtitle {
-            color: #333333 !important;
-            -webkit-text-fill-color: #333333 !important;
-        }
-        body.pdf-exporting a,
-        body.pdf-exporting .nav-btn {
-            color: #2563eb !important;
-            -webkit-text-fill-color: #2563eb !important;
-        }
-        body.pdf-exporting .btn-primary,
-        body.pdf-exporting .action-btn {
-            background: #2563eb !important;
-            color: #ffffff !important;
-            -webkit-text-fill-color: #ffffff !important;
-        }
-        body.pdf-exporting input,
-        body.pdf-exporting select {
-            background: #f8f8f8 !important;
-            color: #1a1a1a !important;
-            border-color: #ccc !important;
-        }
-    </style>
     <script>
         function exportToPDF() {
-            const element = document.querySelector('.container');
+            const source = document.querySelector('.container');
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'position:absolute;left:-9999px;top:0;width:1100px;background:#fff;color:#1a1a1a;font-family:Segoe UI,sans-serif;line-height:1.6;padding:2rem;';
+            const clone = source.cloneNode(true);
 
-            // Switch to light theme so html2canvas renders visible text
-            document.body.classList.add('pdf-exporting');
+            clone.querySelectorAll('details').forEach(d => d.setAttribute('open', ''));
+
+            clone.querySelectorAll('*').forEach(el => {
+                el.style.backgroundColor = '';
+                el.style.backgroundImage = 'none';
+                el.style.boxShadow = 'none';
+                el.style.color = '#1a1a1a';
+                el.style.webkitTextFillColor = '#1a1a1a';
+                el.style.borderColor = '#d0d0d0';
+
+                const tag = el.tagName;
+                if (/^H[1-5]$/.test(tag)) {
+                    el.style.color = '#1a3a6b';
+                    el.style.webkitTextFillColor = '#1a3a6b';
+                    el.style.background = 'none';
+                    el.style.webkitBackgroundClip = 'unset';
+                    el.style.backgroundClip = 'unset';
+                }
+                if (tag === 'A') {
+                    el.style.color = '#2563eb';
+                    el.style.webkitTextFillColor = '#2563eb';
+                }
+                if (tag === 'TH') {
+                    el.style.backgroundColor = '#f0f4f8';
+                    el.style.color = '#1a3a6b';
+                    el.style.webkitTextFillColor = '#1a3a6b';
+                }
+            });
+
+            wrapper.appendChild(clone);
+            document.body.appendChild(wrapper);
 
             const opt = {
-                margin: 0.5,
+                margin: [0.4, 0.4, 0.6, 0.4],
                 filename: 'M365_Copilot_ROI_Projections.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
+                image: { type: 'jpeg', quality: 0.95 },
                 html2canvas: {
                     scale: 2,
                     useCORS: true,
                     logging: false,
-                    backgroundColor: '#ffffff'
+                    backgroundColor: '#ffffff',
+                    width: 1100
                 },
                 jsPDF: {
                     unit: 'in',
@@ -1188,15 +1158,15 @@ function toggleRecapDisplay() {
                     orientation: 'portrait'
                 },
                 pagebreak: {
-                    mode: ['avoid-all', 'css', 'legacy'],
-                    avoid: ['.phase-card', '.month-card', '.insight-card', '.scenario-card', 'img', '.timeline-visual', '.month-grid', '.metric-card']
+                    mode: ['css', 'legacy'],
+                    avoid: ['tr', '.phase-card', '.month-card', '.insight-card', '.scenario-card', '.metric-card', 'img']
                 }
             };
 
-            html2pdf().set(opt).from(element).save().then(() => {
-                document.body.classList.remove('pdf-exporting');
+            html2pdf().set(opt).from(clone).save().then(() => {
+                document.body.removeChild(wrapper);
             }).catch(() => {
-                document.body.classList.remove('pdf-exporting');
+                document.body.removeChild(wrapper);
             });
         }
 

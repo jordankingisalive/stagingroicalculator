@@ -468,6 +468,8 @@ header h1 {
     border: 1px solid var(--border);
     border-top: 3px solid var(--copilot-blue);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    container-type: inline-size;
+    overflow: hidden;
 }
 
 .metric-card:hover {
@@ -476,16 +478,16 @@ header h1 {
 }
 
 .metric-value {
-    font-size: clamp(1.4rem, 4vw, 2.5rem);
+    font-size: clamp(1.1rem, 12cqi, 2.5rem);
     font-weight: bold;
     background: linear-gradient(135deg, var(--copilot-cyan), var(--copilot-blue));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     margin: 0.5rem 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.2;
 }
 
 .metric-label {

@@ -2627,6 +2627,11 @@ async function exportToPptx() {
         );
 
         await pptx.writeFile({ fileName: 'Copilot_ROI_Analysis.pptx' });
+        
+        // Track download event in Microsoft Clarity
+        if (window.clarity) {
+            clarity('event', 'download_powerpoint_analysis');
+        }
     } catch (err) {
         console.error('PPTX export failed:', err);
         alert('PPTX export failed: ' + err.message);
@@ -3235,6 +3240,11 @@ async function exportExecutiveDeck() {
         );
 
         await pptx.writeFile({ fileName: 'Copilot_ROI_Executive_Deck.pptx' });
+        
+        // Track download event in Microsoft Clarity
+        if (window.clarity) {
+            clarity('event', 'download_executive_deck');
+        }
     } catch (err) {
         console.error('Executive Deck export failed:', err);
         alert('Executive Deck export failed: ' + err.message);
@@ -3485,6 +3495,11 @@ Visit: https://jordankingisalive.github.io/CopilotROICalculator/
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+
+        // Track download event in Microsoft Clarity
+        if (window.clarity) {
+            clarity('event', 'download_local_package');
+        }
 
         // Reset button
         if (btn) {

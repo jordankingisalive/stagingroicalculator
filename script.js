@@ -157,19 +157,79 @@ function handleFile(file) {
     reader.readAsText(file);
 }
 
+// Load demo data with pre-configured settings
+async function loadDemoData() {
+    try {
+        // Show loading state
+        const uploadArea = document.getElementById('uploadArea');
+        if (uploadArea) {
+            uploadArea.innerHTML = '<div style="padding: 2rem; text-align: center;"><div class="loading-spinner"></div><p style="margin-top: 1rem;">Loading demo data...</p></div>';
+        }
+
+        // Fetch the demo CSV file
+        const response = await fetch('demo-data.csv');
+        if (!response.ok) {
+            throw new Error('Failed to load demo data');
+        }
+        const csvData = await response.text();
+
+        // Pre-configure settings as specified
+        config.totalPurchasedLicenses = 4000;
+        config.licenseCost = 30;
+        config.minutesPerAction = 6;
+        config.professionalRate = 80;
+        config.intelligentRecapActions = 2000;
+
+        // Update UI inputs to reflect demo config
+        document.getElementById('totalPurchasedLicenses').value = 4000;
+        document.getElementById('licenseCost').value = 30;
+        document.getElementById('minutesPerAction').value = 6;
+        document.getElementById('professionalRate').value = 80;
+        document.getElementById('intelligentRecapActions').value = 2000;
+
+        // Parse the CSV data
+        uploadedData = parseCSV(csvData);
+        config.analysisWeeks = uploadedData.detectedWeeks || 26;
+
+        // Show file preview with demo badge
+        showFilePreview('📊 Demo Data (Groundhog Day)', uploadedData, true);
+
+        // Track demo usage in Clarity
+        if (window.clarity) {
+            clarity('event', 'demo_data_loaded');
+        }
+
+        // Auto-scroll to the preview
+        setTimeout(() => {
+            const preview = document.getElementById('filePreview');
+            if (preview) {
+                preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }, 100);
+
+    } catch (error) {
+        console.error('Error loading demo data:', error);
+        showError('Failed to load demo data: ' + error.message);
+        // Restore upload area
+        location.reload();
+    }
+}
+
 // Show file preview with Calculate button
-function showFilePreview(fileName, data) {
+function showFilePreview(fileName, data, isDemo = false) {
     const rows = data.rows;
     const totalUsers = rows.reduce((s, r) => s + r.enabledUsers, 0);
     const totalWeeklyActions = rows.reduce((s, r) => s + r.weeklyActions, 0);
     const groupLabel = data.groupLabel || 'teams';
+
+    const demoBadge = isDemo ? '<span style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 0.5rem;">Demo Mode</span>' : '';
 
     const previewHtml = `
         <div style="background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin: 1.5rem 0; animation: fadeIn 0.4s ease;">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
                 <span style="font-size: 1.5rem;">✅</span>
                 <div>
-                    <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary, #F1F5F9);">${fileName}</div>
+                    <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary, #F1F5F9);">${fileName}${demoBadge}</div>
                     <div style="font-size: 0.85rem; color: var(--text-secondary, #94A3B8);">File loaded successfully</div>
                 </div>
             </div>

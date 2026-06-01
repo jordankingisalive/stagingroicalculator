@@ -272,27 +272,57 @@ function showFilePreview(fileName, data) {
     const totalWeeklyActions = rows.reduce((s, r) => s + r.weeklyActions, 0);
     const groupLabel = data.groupLabel || 'teams';
 
+    // ---- Grouping picker (Viva Insights only) ----
+    // Customers commonly want to cut data by something other than Organization (Team, Division,
+    // Custom Division, Leader 1, Cost Center, etc.). We auto-detect candidate columns during
+    // parseVivaInsights and let the user pick before they hit Calculate.
+    const candidates = (data.groupingCandidates || []);
+    const currentGrouping = data.currentGrouping || data.groupLabel || 'Organization';
+    let groupingPickerHtml = '';
+    if (candidates.length > 1) {
+        const options = candidates.map(c => {
+            const sel = c.name === currentGrouping ? 'selected' : '';
+            return `<option value="${c.name}" ${sel}>${c.name} (${c.distinctCount} groups, ${c.coverage}% covered)</option>`;
+        }).join('');
+        groupingPickerHtml = `
+            <div style="background: var(--surface-raised, #253449); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;">
+                <label for="groupingSelect" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-primary, #F1F5F9); margin-bottom: 0.4rem;">
+                    Group results by
+                    <span title="Choose which demographic column to slice the report by. Defaults to Organization (the canonical Viva Insights column). Other detected fields are listed below — pick whichever matches how your business operates (Team, Division, Cost Center, Leader, etc.). Methodology: any column with 2&ndash;500 distinct values where each value covers at least 2 people and the column is &ge;50% populated is offered as a candidate." style="cursor: help; color: var(--text-secondary, #94A3B8); margin-left: 0.25rem; font-weight: 400;">&#9432;</span>
+                </label>
+                <select id="groupingSelect" onchange="handleGroupingChange(this.value)" style="width: 100%; padding: 0.6rem 0.75rem; font-size: 0.95rem; background: var(--surface, #1E293B); color: var(--text-primary, #F1F5F9); border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 8px; font-family: inherit; cursor: pointer;">
+                    ${options}
+                </select>
+                <div style="font-size: 0.78rem; color: var(--text-secondary, #94A3B8); margin-top: 0.4rem; line-height: 1.4;">
+                    Aggregation rule: any group with &lt;5 distinct people, or blank/N/A, is rolled into &ldquo;Other&rdquo; (matches the Microsoft Analytics Hub <a href="https://microsoft.github.io/Analytics-Hub/" target="_blank" rel="noopener" style="color: var(--copilot-cyan, #00D4FF); text-decoration: none;">Super User Adoption</a> template).
+                </div>
+            </div>
+        `;
+    }
+
     const previewHtml = `
         <div style="background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin: 1.5rem 0; animation: fadeIn 0.4s ease;">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
                 <span style="font-size: 1.5rem;">✅</span>
                 <div>
                     <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary, #F1F5F9);">${fileName}</div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary, #94A3B8);">File loaded successfully</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary, #94A3B8);">File loaded successfully${data.detectedLocale && data.detectedLocale !== 'en-US' ? ' &middot; Detected locale: ' + data.detectedLocale + ' (normalized to en-US)' : ''}</div>
                 </div>
             </div>
 
+            ${groupingPickerHtml}
+
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
                 <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${rows.length}</div>
-                    <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">${groupLabel}</div>
+                    <div id="previewGroupCount" style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${rows.length}</div>
+                    <div id="previewGroupLabel" style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">${groupLabel}</div>
                 </div>
                 <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                    <div id="previewUserCount" style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalUsers.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                     <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Licensed Users</div>
                 </div>
                 <div style="background: var(--surface-raised, #253449); border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08));">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                    <div id="previewActionCount" style="font-size: 1.5rem; font-weight: 700; color: var(--copilot-cyan, #00D4FF);">${totalWeeklyActions.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
                     <div style="font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.5px;">Weekly Actions</div>
                 </div>
             </div>
@@ -355,6 +385,38 @@ function runCalculation() {
     }, 300);
 }
 
+// Handle a change to the grouping picker on the file-preview pane.
+// Re-aggregates the Viva Insights data under the chosen field and refreshes preview stats.
+// If results are already on-screen, also re-renders them.
+function handleGroupingChange(newGrouping) {
+    if (!uploadedData || !uploadedData.isVivaInsights) return;
+    if (!newGrouping || newGrouping === uploadedData.currentGrouping) return;
+    try {
+        reaggregateVivaByGrouping(uploadedData, newGrouping);
+        // Refresh preview tiles
+        const rows = uploadedData.rows;
+        const totalUsers = rows.reduce((s, r) => s + r.enabledUsers, 0);
+        const totalWeekly = rows.reduce((s, r) => s + r.weeklyActions, 0);
+        const elGroupCount = document.getElementById('previewGroupCount');
+        const elGroupLabel = document.getElementById('previewGroupLabel');
+        const elUserCount  = document.getElementById('previewUserCount');
+        const elActionCnt  = document.getElementById('previewActionCount');
+        if (elGroupCount) elGroupCount.textContent = rows.length;
+        if (elGroupLabel) elGroupLabel.textContent = newGrouping;
+        if (elUserCount)  elUserCount.textContent  = totalUsers.toLocaleString(undefined, {maximumFractionDigits: 2});
+        if (elActionCnt)  elActionCnt.textContent  = totalWeekly.toLocaleString(undefined, {maximumFractionDigits: 2});
+        // If a calculation has already rendered, refresh shared storage + re-render
+        if (resultsDisplayed) {
+            saveSharedData();
+            runCalculation();
+        }
+        console.log(`[handleGroupingChange] Switched to "${newGrouping}" -> ${rows.length} groups`);
+    } catch (e) {
+        console.error('[handleGroupingChange] failed:', e);
+        showError('Could not re-aggregate by ' + newGrouping + ': ' + e.message);
+    }
+}
+
 // Show a banner prompting user to recalculate after config changes
 function showRecalculateBanner() {
     if (document.getElementById('recalcBanner')) return; // already visible
@@ -382,13 +444,29 @@ function parseCSV(csvText) {
     }
 
     // Parse header
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    const rawHeaders = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+
+    // ---- Header normalization: en-GB → en-US and es → en-US ----
+    // Mirrors the Power Query M code in the Super User Adoption template so the rest of
+    // the report can rely on canonical en-US column names regardless of the customer's locale.
+    let headers = rawHeaders;
+    let detectedLocale = 'en-US';
+    if (window.HeaderMapping) {
+        detectedLocale = window.HeaderMapping.detectLocale(rawHeaders);
+        headers = window.HeaderMapping.normalizeHeaders(rawHeaders);
+        if (detectedLocale !== 'en-US') {
+            console.log(`[parseCSV] Detected locale ${detectedLocale}, normalized headers to en-US`);
+        }
+    }
 
     // ---- Viva Insights per-person export fast path ----
     // Detected when the Viva PersonId + MetricDate + Total Copilot actions taken columns are present.
     // This bypasses the aggregated-org flattenData() path so we can compute real per-user cohorts.
     if (detectVivaInsights(headers)) {
-        return parseVivaInsights(lines, headers);
+        const result = parseVivaInsights(lines, headers);
+        result.detectedLocale = detectedLocale;
+        result.rawHeaders = rawHeaders;
+        return result;
     }
 
     // Parse rows (aggregated formats)
@@ -447,6 +525,33 @@ function parseVivaInsights(lines, headers) {
     const iOrg         = col('Organization');
     const iFunction    = col('FunctionType');
 
+    // ---- Grouping candidate detection ----
+    // The Viva Insights template normalizes one column to "Organization", but customers also
+    // commonly include other demographic cuts like Team, Division, Custom Division, Leader 1/2/3,
+    // Cost Center, Region, etc. Identify every plausible grouping column up front so the user
+    // can swap the slicer post-load. A column is a candidate if:
+    //   - it is not a known canonical metric / identity column, AND
+    //   - it is not numeric-looking, AND
+    //   - it eventually shows 2..500 distinct non-blank values with each value covering >=2 persons.
+    // The metric-skiplist comes from the M code OptimizedTypeMap (numeric columns) plus our own
+    // identity exclusions.
+    const SKIP_GROUPING = new Set([
+        'personid','displayname','metricdate','timezone','weekenddays','isactive',
+        'full_name_1','full_name_2','full_name_3','full_name_4','full_name_5','full_name_6','full_name_7'
+    ]);
+    const METRIC_PATTERN = /(hours?|actions?|prompts?|days?|users?|emails?|chats?|messages?|meetings?|calls?|visits?|posts?|reactions?|replies|ties|size|span|count|recap|reuniones|llamadas|horas|días|dias|indicaciones|chats|correos|relaciones)/i;
+    const groupingCandidateIdx = [];
+    headers.forEach((h, idx) => {
+        const lo = h.trim().toLowerCase();
+        if (SKIP_GROUPING.has(lo)) return;
+        if (METRIC_PATTERN.test(lo)) return;
+        groupingCandidateIdx.push({ idx, name: h.trim() });
+    });
+    // Per-candidate-per-person value collection (latest non-blank wins, same convention as org).
+    const groupingValuesByPerson = {}; // { personId: { Organization: '...', Team: '...' } }
+    const groupingDistinct = {};        // { columnName: { value: Set(personId) } }
+    groupingCandidateIdx.forEach(c => { groupingDistinct[c.name] = {}; });
+
     // ---- Per-app columns (e.g. "Copilot actions taken in Word", "Chat actions taken in Teams") ----
     // We detect any column whose lowercase name matches /actions? taken in (\w[\w &]*)/ and capture
     // the app label after "in". Used for the per-app attribution + behavioral profile pages.
@@ -496,6 +601,20 @@ function parseVivaInsights(lines, headers) {
             // Person changed orgs mid-window: latest non-blank wins
             personIndex[personId].org = orgRaw;
         }
+
+        // Capture per-person grouping-candidate values (latest non-blank wins).
+        if (groupingCandidateIdx.length) {
+            const bag = groupingValuesByPerson[personId] || (groupingValuesByPerson[personId] = {});
+            for (const c of groupingCandidateIdx) {
+                const val = (v[c.idx] || '').trim();
+                if (val) {
+                    bag[c.name] = val;
+                    const dist = groupingDistinct[c.name];
+                    if (!dist[val]) dist[val] = new Set();
+                    dist[val].add(personId);
+                }
+            }
+        }
         personIndex[personId].weeks.push({
             d: dateStr,
             a: actions,
@@ -522,6 +641,39 @@ function parseVivaInsights(lines, headers) {
 
     // Sort each person's weeks ascending — needed for rolling-window threshold logic
     Object.values(personIndex).forEach(p => p.weeks.sort((a, b) => a.d.localeCompare(b.d)));
+
+    // ---- Finalize grouping candidates ----
+    // Keep columns with 2..500 distinct non-blank values where each value covers >=2 persons.
+    // Attach the per-person bag to personIndex so re-aggregation later can switch the slicer.
+    const totalPersons = Object.keys(personIndex).length;
+    const groupingCandidates = [];
+    groupingCandidateIdx.forEach(c => {
+        const dist = groupingDistinct[c.name];
+        const distinctVals = Object.keys(dist);
+        if (distinctVals.length < 2 || distinctVals.length > 500) return;
+        const minPersonsPerValue = distinctVals.reduce((min, v) => Math.min(min, dist[v].size), Infinity);
+        if (minPersonsPerValue < 2) return;
+        // Coverage: how many persons have ANY value here
+        const coverage = distinctVals.reduce((s, v) => s + dist[v].size, 0) / totalPersons;
+        if (coverage < 0.5) return; // skip columns that are mostly blank
+        groupingCandidates.push({
+            name: c.name,
+            distinctCount: distinctVals.length,
+            sampleValues: distinctVals.slice(0, 8),
+            coverage: Math.round(coverage * 100)
+        });
+    });
+    // Stamp each person's grouping bag for use during re-aggregation
+    Object.keys(personIndex).forEach(pid => {
+        personIndex[pid].groupings = groupingValuesByPerson[pid] || {};
+    });
+    // Pick default grouping: Organization > FunctionType > first candidate
+    let defaultGrouping = 'Organization';
+    if (!groupingCandidates.some(g => g.name === defaultGrouping)) {
+        if (groupingCandidates.some(g => g.name === 'FunctionType')) defaultGrouping = 'FunctionType';
+        else if (groupingCandidates.length) defaultGrouping = groupingCandidates[0].name;
+    }
+    console.log(`[parseVivaInsights] Grouping candidates: ${groupingCandidates.map(g => g.name + '(' + g.distinctCount + ')').join(', ')}; default=${defaultGrouping}`);
 
     // ---- Organization (Aggregated) rule from the Power BI model ----
     // Distinct PersonIDs per org. Orgs with <5 distinct users OR blank/N/A/Unassigned are rolled to "Other".
@@ -698,7 +850,9 @@ function parseVivaInsights(lines, headers) {
         rows: orgRows,
         mapping: {},
         weeklyData: orgWeeklyData,
-        groupLabel: 'Organization',
+        groupLabel: defaultGrouping,
+        groupingCandidates,
+        currentGrouping: defaultGrouping,
         detectedWeeks,
         dateRange,
         sortedDates,
@@ -708,6 +862,107 @@ function parseVivaInsights(lines, headers) {
         hasAppData,
         appColumns: appColumns.map(c => c.app)
     };
+}
+
+// Re-aggregate an existing parseVivaInsights() result under a different grouping field
+// (e.g. 'Organization' → 'Team', 'Division', 'Custom Division', 'Leader 1', etc.).
+// Mutates the result object's rows / weeklyData / groupLabel / currentGrouping in place and returns it.
+// personIndex is left intact; only the per-group rollups are recomputed.
+function reaggregateVivaByGrouping(viva, groupingName) {
+    if (!viva || !viva.isVivaInsights || !viva.personIndex) return viva;
+    const personIndex = viva.personIndex;
+    const sortedDates = viva.sortedDates;
+    const toDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    // Resolve per-person group value for the chosen field
+    const valueOf = (p) => {
+        if (groupingName === 'Organization') return (p.org || '').trim();
+        if (groupingName === 'FunctionType') return (p.fn || (p.groupings && p.groupings.FunctionType) || '').trim();
+        return (p.groupings && p.groupings[groupingName]) ? String(p.groupings[groupingName]).trim() : '';
+    };
+
+    // <5 distinct persons OR blank/N/A/Unassigned → "Other"
+    const personsPerGroup = {};
+    Object.entries(personIndex).forEach(([pid, p]) => {
+        const v = valueOf(p) || 'Unassigned';
+        if (!personsPerGroup[v]) personsPerGroup[v] = new Set();
+        personsPerGroup[v].add(pid);
+    });
+    const aggName = (raw) => {
+        const t = (raw || '').trim();
+        if (!t || t.toLowerCase() === 'n/a' || t.toLowerCase() === 'unassigned') return 'Other';
+        const c = personsPerGroup[t] ? personsPerGroup[t].size : 0;
+        return c < 5 ? 'Other' : t;
+    };
+    Object.values(personIndex).forEach(p => { p.orgAgg = aggName(valueOf(p)); });
+
+    // Rebuild org×week cells
+    const cells = {};
+    Object.values(personIndex).forEach(p => {
+        const g = p.orgAgg;
+        if (!cells[g]) cells[g] = {};
+        p.weeks.forEach(w => {
+            const c = cells[g][w.d] || (cells[g][w.d] = {
+                persons: 0, withActions: 0, actionsSum: 0, activeDaysSum: 0,
+                enabledDaysSum: 0, assistHrsSum: 0, intelRecapSum: 0, enabledPersons: 0
+            });
+            c.persons += 1;
+            if (w.a > 0) c.withActions += 1;
+            c.actionsSum += w.a; c.activeDaysSum += w.ad; c.enabledDaysSum += w.ed;
+            c.assistHrsSum += w.ah; c.intelRecapSum += w.ir;
+            if (w.ed > 0) c.enabledPersons += 1;
+        });
+    });
+
+    // Patch power counts per (group, week) using the person thresholds already computed
+    const powerCounts = {};
+    Object.values(personIndex).forEach(p => {
+        const g = p.orgAgg;
+        if (!powerCounts[g]) powerCounts[g] = {};
+        p.weeks.forEach(w => {
+            if (w.threshold === 'Power Users') powerCounts[g][w.d] = (powerCounts[g][w.d] || 0) + 1;
+        });
+    });
+
+    const weeklyData = {};
+    const rows = [];
+    const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    Object.entries(cells).forEach(([g, byDate]) => {
+        const weekly = sortedDates.map(d => {
+            const c = byDate[d];
+            if (!c) return null;
+            const enabled = c.enabledPersons || c.persons;
+            const activePercent = c.persons > 0 ? (c.withActions / c.persons) * 100 : 0;
+            const actionsPerUser = c.withActions > 0 ? c.actionsSum / c.withActions : 0;
+            const activeDays = c.persons > 0 ? c.activeDaysSum / c.persons : 0;
+            const powerCount = (powerCounts[g] && powerCounts[g][d]) || 0;
+            const powerPercent = c.persons > 0 ? (powerCount / c.persons) * 100 : 0;
+            return { date: parseDate(d), actionsPerUser, activePercent, powerPercent, activeDays, enabled };
+        }).filter(Boolean);
+        if (weekly.length === 0) return;
+        weeklyData[g] = weekly;
+        const last = weekly[weekly.length - 1];
+        const activePercent  = avg(weekly.map(w => w.activePercent).filter(v => v > 0));
+        const actionsPerUser = avg(weekly.map(w => w.actionsPerUser).filter(v => v > 0));
+        const avgActiveDays  = avg(weekly.map(w => w.activeDays).filter(v => v > 0));
+        const enabledUsers = last.enabled;
+        const activeUsers = Math.round((enabledUsers * activePercent) / 100);
+        const weeklyActions = actionsPerUser * activeUsers;
+        const recent = weekly.slice(-4);
+        const recentPowerPct = avg(recent.map(w => w.powerPercent).filter(v => v > 0));
+        const powerUsers = Math.round((enabledUsers * recentPowerPct) / 100);
+        rows.push({
+            team: g, enabledUsers, activeUsers, weeklyActions,
+            monthlyActions: weeklyActions * 4.33,
+            engagement: avgActiveDays, actionsPerUser, powerUsers
+        });
+    });
+
+    viva.rows = rows;
+    viva.weeklyData = weeklyData;
+    viva.groupLabel = groupingName;
+    viva.currentGrouping = groupingName;
+    return viva;
 }
 
 // Compute the 5 Usage Threshold cohorts for the window defined by dateSetForCohort,

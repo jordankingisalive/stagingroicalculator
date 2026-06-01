@@ -381,7 +381,14 @@ function parseCSV(csvText) {
     // Parse header
     const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
 
-    // Parse rows
+    // ---- Viva Insights per-person export fast path ----
+    // Detected when the Viva PersonId + MetricDate + Total Copilot actions taken columns are present.
+    // This bypasses the aggregated-org flattenData() path so we can compute real per-user cohorts.
+    if (detectVivaInsights(headers)) {
+        return parseVivaInsights(lines, headers);
+    }
+
+    // Parse rows (aggregated formats)
     const rows = [];
     for (let i = 1; i < lines.length; i++) {
         const values = parseCSVLine(lines[i]);
@@ -400,6 +407,468 @@ function parseCSV(csvText) {
 
     // Flatten and normalize data
     return flattenData(rows);
+}
+
+// Identify a Viva Insights per-person weekly export by the column signature.
+// We deliberately ignore DisplayName / full_name_* (anonymization artifacts) and key off
+// the columns the Power BI "Super User Impact" model is built on.
+function detectVivaInsights(headers) {
+    const set = new Set(headers.map(h => h.toLowerCase()));
+    return set.has('personid') && set.has('metricdate') && set.has('total copilot actions taken');
+}
+
+// Parse a Viva Insights per-person, per-week CSV.
+// Returns the same { rows, weeklyData, groupLabel, detectedWeeks, dateRange, sortedDates }
+// shape that the rest of the report consumes, PLUS:
+//   personCohorts  - real per-user Usage Threshold tiers (replaces the broken team-percentile table)
+//   personIndex    - slim per-person history used by computeCohortsForPeriod()
+//   isVivaInsights - flag so renderers know real cohorts are available
+function parseVivaInsights(lines, headers) {
+    // Build a lower-cased header -> index map so we tolerate header drift.
+    const hidx = {};
+    headers.forEach((h, i) => { hidx[h.trim().toLowerCase()] = i; });
+    const col = (name) => hidx[name.toLowerCase()];
+
+    // Required columns
+    const iPerson   = col('PersonId');
+    const iDate     = col('MetricDate');
+    const iActions  = col('Total Copilot actions taken');
+    if (iPerson == null || iDate == null || iActions == null) {
+        throw new Error('Viva Insights export missing PersonId, MetricDate, or Total Copilot actions taken');
+    }
+    // Optional columns we use when present
+    const iActiveDays  = col('Total Copilot active days');
+    const iEnabledDays = col('Total Copilot enabled days');
+    const iAssistHrs   = col('Copilot assisted hours');
+    const iIntelRecap  = col('Intelligent recap actions taken');
+    const iOrg         = col('Organization');
+    const iFunction    = col('FunctionType');
+
+    // ---- First pass: build slim per-person weekly index, raw org rollup, date set ----
+    // personIndex[personId] = { org, fn, weeks: [{d, a, ad, ed, ah, ir}, ...] }
+    const personIndex = {};
+    const dateSet = new Set();
+
+    // Local-tz YYYY-MM-DD formatter (avoids UTC drift from toISOString)
+    const toDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    for (let li = 1; li < lines.length; li++) {
+        const v = parseCSVLine(lines[li]);
+        if (v.length < headers.length) continue;
+
+        const personId = v[iPerson];
+        const rawDate = (v[iDate] || '').trim();
+        const parsedDate = parseDate(rawDate);
+        if (!personId || !parsedDate) continue;
+        const dateStr = toDateKey(parsedDate);
+
+        const actions = parseNumber(v[iActions]);
+        const activeDays  = iActiveDays  != null ? parseNumber(v[iActiveDays])  : 0;
+        const enabledDays = iEnabledDays != null ? parseNumber(v[iEnabledDays]) : 0;
+        const assistHrs   = iAssistHrs   != null ? parseNumber(v[iAssistHrs])   : 0;
+        const intelRecap  = iIntelRecap  != null ? parseNumber(v[iIntelRecap])  : 0;
+        const orgRaw      = iOrg      != null ? (v[iOrg]      || '').trim() : 'Unassigned';
+        const fnRaw       = iFunction != null ? (v[iFunction] || '').trim() : '';
+
+        if (!personIndex[personId]) {
+            personIndex[personId] = { org: orgRaw, fn: fnRaw, weeks: [] };
+        } else if (orgRaw && personIndex[personId].org !== orgRaw) {
+            // Person changed orgs mid-window: latest non-blank wins
+            personIndex[personId].org = orgRaw;
+        }
+        personIndex[personId].weeks.push({
+            d: dateStr,
+            a: actions,
+            ad: activeDays,
+            ed: enabledDays,
+            ah: assistHrs,
+            ir: intelRecap
+        });
+        dateSet.add(dateStr);
+    }
+
+    const sortedDates = [...dateSet].sort();
+    if (sortedDates.length === 0) {
+        throw new Error('Viva Insights export contained no parseable weekly snapshots');
+    }
+
+    // Sort each person's weeks ascending — needed for rolling-window threshold logic
+    Object.values(personIndex).forEach(p => p.weeks.sort((a, b) => a.d.localeCompare(b.d)));
+
+    // ---- Organization (Aggregated) rule from the Power BI model ----
+    // Distinct PersonIDs per org. Orgs with <5 distinct users OR blank/N/A/Unassigned are rolled to "Other".
+    const personsPerOrg = {};
+    Object.entries(personIndex).forEach(([pid, p]) => {
+        const o = p.org || 'Unassigned';
+        if (!personsPerOrg[o]) personsPerOrg[o] = new Set();
+        personsPerOrg[o].add(pid);
+    });
+    const orgAggregatedName = (raw) => {
+        const trimmed = (raw || '').trim();
+        if (!trimmed || trimmed.toLowerCase() === 'n/a' || trimmed.toLowerCase() === 'unassigned') return 'Other';
+        const count = personsPerOrg[trimmed] ? personsPerOrg[trimmed].size : 0;
+        if (count < 5) return 'Other';
+        return trimmed;
+    };
+    // Stamp the aggregated name onto each person (used by aggregation passes below)
+    Object.values(personIndex).forEach(p => { p.orgAgg = orgAggregatedName(p.org); });
+
+    // ---- Second pass: aggregate to org × week cells ----
+    // For each (org, week): distinct persons, persons-with-actions, sum actions, sum active days, sum enabled days.
+    // orgWeekCells[org][date] = { persons, withActions, actionsSum, activeDaysSum, enabledDaysSum, assistHrsSum, intelRecapSum, enabledPersons }
+    const orgWeekCells = {};
+    Object.entries(personIndex).forEach(([pid, p]) => {
+        const o = p.orgAgg;
+        if (!orgWeekCells[o]) orgWeekCells[o] = {};
+        p.weeks.forEach(w => {
+            const cell = orgWeekCells[o][w.d] || (orgWeekCells[o][w.d] = {
+                persons: 0, withActions: 0, actionsSum: 0, activeDaysSum: 0,
+                enabledDaysSum: 0, assistHrsSum: 0, intelRecapSum: 0, enabledPersons: 0
+            });
+            cell.persons += 1;
+            if (w.a > 0) cell.withActions += 1;
+            cell.actionsSum    += w.a;
+            cell.activeDaysSum += w.ad;
+            cell.enabledDaysSum += w.ed;
+            cell.assistHrsSum  += w.ah;
+            cell.intelRecapSum += w.ir;
+            if (w.ed > 0) cell.enabledPersons += 1;
+        });
+    });
+
+    // ---- Build orgWeeklyData (matches the wide-format shape consumed by the report) ----
+    const orgWeeklyData = {};
+    const orgRows = [];
+    Object.entries(orgWeekCells).forEach(([orgName, byDate]) => {
+        const weekly = sortedDates.map(d => {
+            const c = byDate[d];
+            if (!c) return null;
+            const enabled        = c.enabledPersons || c.persons; // fall back to persons seen if enabledDays missing
+            const activePercent  = c.persons > 0 ? (c.withActions / c.persons) * 100 : 0;
+            const actionsPerUser = c.withActions > 0 ? c.actionsSum / c.withActions : 0;
+            const activeDays     = c.persons > 0 ? c.activeDaysSum / c.persons : 0;
+            // Power-user % at the org/week level is filled in during cohort assignment below.
+            return {
+                date: parseDate(d),
+                actionsPerUser,
+                activePercent,
+                powerPercent: 0, // patched after threshold computation
+                activeDays,
+                enabled
+            };
+        }).filter(Boolean);
+        if (weekly.length === 0) return;
+        orgWeeklyData[orgName] = weekly;
+
+        // Build the summary row using the average-across-weeks pattern the rest of the app uses.
+        const last = weekly[weekly.length - 1];
+        const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        const activePercent  = avg(weekly.map(w => w.activePercent).filter(v => v > 0));
+        const actionsPerUser = avg(weekly.map(w => w.actionsPerUser).filter(v => v > 0));
+        const avgActiveDays  = avg(weekly.map(w => w.activeDays).filter(v => v > 0));
+        const enabledUsers   = last.enabled;
+        const activeUsers    = Math.round((enabledUsers * activePercent) / 100);
+        const weeklyActions  = actionsPerUser * activeUsers;
+        const monthlyActions = weeklyActions * 4.33;
+        orgRows.push({
+            team: orgName,
+            enabledUsers,
+            activeUsers,
+            weeklyActions,
+            monthlyActions,
+            engagement: avgActiveDays,
+            actionsPerUser,
+            powerUsers: 0 // filled in after cohort pass
+        });
+    });
+
+    // ---- Third pass: compute Usage Threshold per (person, week) using 12-week rolling window ----
+    // Mirrors the Power BI calculated columns:
+    //   _Total Copilot actions_RL12W = AVERAGEX over [date, date-7, ..., date-77]
+    //   _IsHabit_RL12W              = COUNTROWS where actions >= 1 in that window >= 9
+    //   Usage Threshold             = SWITCH(...) (Power / Habitual / Novice / Low / Non)
+    const THRESHOLDS = ['Power Users', 'Habitual Users', 'Novice Users', 'Low Users', 'Non Users'];
+    const classify = (avg12, habit) => {
+        if (avg12 >= 20 && habit) return 'Power Users';
+        if (avg12 >= 8  && habit) return 'Habitual Users';
+        if (avg12 >= 1)           return 'Novice Users';
+        if (avg12 >  0)           return 'Low Users';
+        return 'Non Users';
+    };
+    Object.values(personIndex).forEach(p => {
+        // Build a date->actions lookup so rolling math is O(weeks) per person.
+        const byDate = {};
+        p.weeks.forEach(w => { byDate[w.d] = w.a; });
+        p.weeks.forEach(w => {
+            // Build a list of up to 12 trailing week-date strings (-0, -7, ..., -77 days)
+            const base = parseDate(w.d);
+            if (!base) { w.threshold = 'Non Users'; return; }
+            let sum = 0, count = 0, nonZero = 0;
+            for (let k = 0; k < 12; k++) {
+                const dt = new Date(base.getTime() - k * 7 * 86400000);
+                const key = toDateKey(dt);
+                if (Object.prototype.hasOwnProperty.call(byDate, key)) {
+                    const a = byDate[key];
+                    sum += a;
+                    count += 1;
+                    if (a >= 1) nonZero += 1;
+                }
+            }
+            const avg12 = count > 0 ? sum / count : 0;
+            const habit = nonZero >= 9;
+            w.threshold = classify(avg12, habit);
+            w.avg12 = avg12;
+        });
+    });
+
+    // ---- Patch powerPercent / powerUsers into the org weekly cells & summary rows ----
+    // For each (org, week): count persons whose threshold AT THAT WEEK is "Power Users".
+    const orgWeekPower = {}; // orgWeekPower[org][date] = count
+    Object.values(personIndex).forEach(p => {
+        const o = p.orgAgg;
+        if (!orgWeekPower[o]) orgWeekPower[o] = {};
+        p.weeks.forEach(w => {
+            if (w.threshold === 'Power Users') {
+                orgWeekPower[o][w.d] = (orgWeekPower[o][w.d] || 0) + 1;
+            }
+        });
+    });
+    Object.entries(orgWeeklyData).forEach(([orgName, weekly]) => {
+        weekly.forEach(week => {
+            const key = week.date instanceof Date ? toDateKey(week.date) : week.date;
+            const powerCount = (orgWeekPower[orgName] && orgWeekPower[orgName][key]) || 0;
+            const cell = orgWeekCells[orgName][key];
+            const persons = cell ? cell.persons : 0;
+            week.powerPercent = persons > 0 ? (powerCount / persons) * 100 : 0;
+        });
+    });
+    // Refresh summary rows' powerUsers from the recent-4-weeks avg, same convention as the wide-format branch.
+    orgRows.forEach(row => {
+        const weekly = orgWeeklyData[row.team];
+        const recent = weekly.slice(-4);
+        const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        const recentPowerPct = avg(recent.map(w => w.powerPercent).filter(v => v > 0));
+        row.powerUsers = Math.round((row.enabledUsers * recentPowerPct) / 100);
+    });
+
+    // ---- Person cohorts: compute for the default "all" window so the initial render has data ----
+    const personCohorts = computePersonCohortsFromIndex(personIndex, new Set(sortedDates), sortedDates);
+
+    // ---- detectedWeeks + dateRange ----
+    let detectedWeeks = sortedDates.length;
+    if (sortedDates.length >= 2) {
+        const spanDays = (new Date(sortedDates[sortedDates.length - 1]) - new Date(sortedDates[0])) / 86400000;
+        detectedWeeks = Math.max(Math.round(spanDays / 7) + 1, sortedDates.length);
+    }
+    const dateRange = sortedDates.length >= 2
+        ? `${sortedDates[0]} to ${sortedDates[sortedDates.length - 1]}`
+        : sortedDates[0];
+
+    console.log(`Viva Insights: ${Object.keys(personIndex).length} persons, ${Object.keys(orgWeeklyData).length} orgs (post-aggregation), ${sortedDates.length} weeks`);
+
+    return {
+        rows: orgRows,
+        mapping: {},
+        weeklyData: orgWeeklyData,
+        groupLabel: 'Organization',
+        detectedWeeks,
+        dateRange,
+        sortedDates,
+        personIndex,
+        personCohorts,
+        isVivaInsights: true
+    };
+}
+
+// Compute the 5 Usage Threshold cohorts for the window defined by dateSetForCohort,
+// using the threshold each person had at the LAST week of the window (Power BI "Latest Week" convention).
+// Action volume is summed across the window's weeks for monetary value.
+function computePersonCohortsFromIndex(personIndex, dateSetForCohort, sortedDatesInWindow) {
+    if (!personIndex || !sortedDatesInWindow || sortedDatesInWindow.length === 0) return null;
+    const lastWeek = sortedDatesInWindow[sortedDatesInWindow.length - 1];
+    const numWeeks = sortedDatesInWindow.length;
+    const rate = config.professionalRate;
+    const mpa = config.minutesPerAction;
+    const licenseCost = config.licenseCost;
+
+    const buckets = {
+        'Power Users':    { count: 0, actionsSum: 0, weeksActive: 0 },
+        'Habitual Users': { count: 0, actionsSum: 0, weeksActive: 0 },
+        'Novice Users':   { count: 0, actionsSum: 0, weeksActive: 0 },
+        'Low Users':      { count: 0, actionsSum: 0, weeksActive: 0 },
+        'Non Users':      { count: 0, actionsSum: 0, weeksActive: 0 }
+    };
+
+    Object.values(personIndex).forEach(p => {
+        // Find this person's threshold at the latest week of the window (or the latest week they appear in within the window).
+        const inWindow = p.weeks.filter(w => dateSetForCohort.has(w.d));
+        if (inWindow.length === 0) return;
+        const lastInWindow = inWindow.reduce((a, b) => a.d > b.d ? a : b);
+        const cohort = lastInWindow.threshold || 'Non Users';
+        const bucket = buckets[cohort];
+        if (!bucket) return;
+        bucket.count += 1;
+        bucket.actionsSum += inWindow.reduce((s, w) => s + w.a, 0);
+        bucket.weeksActive += inWindow.length;
+    });
+
+    // Convert to display rows
+    const rows = Object.entries(buckets).map(([name, b]) => {
+        const avgWeeksPerPerson = b.count > 0 ? b.weeksActive / b.count : 0;
+        // Monthly actions per user: avg weekly actions × 4.33
+        const avgWeeklyActions = b.count > 0 && avgWeeksPerPerson > 0
+            ? (b.actionsSum / b.count) / avgWeeksPerPerson
+            : 0;
+        const actionsPerMonth = avgWeeklyActions * 4.33;
+        const investment = b.count * licenseCost;
+        // Total monthly value = total monthly actions in cohort × time savings × rate
+        const totalWeeklyActionsAcrossCohort = avgWeeksPerPerson > 0 ? b.actionsSum / avgWeeksPerPerson : 0;
+        const totalMonthlyActions = totalWeeklyActionsAcrossCohort * 4.33;
+        const monthlyValue = (totalMonthlyActions * mpa / 60) * rate;
+        const roi = investment > 0 ? monthlyValue / investment : 0;
+        return { name, count: b.count, actionsPerMonth, investment, monthlyValue, roi };
+    });
+
+    const totalCount = rows.reduce((s, r) => s + r.count, 0);
+    const totalInvestment = rows.reduce((s, r) => s + r.investment, 0);
+    const totalValue = rows.reduce((s, r) => s + r.monthlyValue, 0);
+    const totalActionsWeighted = totalCount > 0
+        ? rows.reduce((s, r) => s + r.actionsPerMonth * r.count, 0) / totalCount
+        : 0;
+    const totalRoi = totalInvestment > 0 ? totalValue / totalInvestment : 0;
+
+    return {
+        rows,
+        totals: {
+            count: totalCount,
+            actionsPerMonth: totalActionsWeighted,
+            investment: totalInvestment,
+            monthlyValue: totalValue,
+            roi: totalRoi
+        },
+        windowLastWeek: lastWeek,
+        windowWeeks: numWeeks
+    };
+}
+
+// Recompute person cohorts for a specific time-period window (used by switchTimePeriod).
+// Returns the same shape as computePersonCohortsFromIndex, or null if no Viva data is loaded.
+function computeCohortsForPeriod(period) {
+    if (!uploadedData || !uploadedData.isVivaInsights || !uploadedData.personIndex) return null;
+    const allDates = uploadedData.sortedDates;
+    if (!allDates || allDates.length === 0) return null;
+
+    let dateSlice;
+    const total = allDates.length;
+    switch (period) {
+        case 'last4':   dateSlice = allDates.slice(-4); break;
+        case 'last13':  dateSlice = allDates.slice(-13); break;
+        case '3moAgo':  dateSlice = allDates.slice(0, Math.max(1, total - 13)); break;
+        case 'first4':  dateSlice = allDates.slice(0, 4); break;
+        case 'all':
+        default:        dateSlice = allDates; break;
+    }
+    return computePersonCohortsFromIndex(uploadedData.personIndex, new Set(dateSlice), dateSlice);
+}
+
+// Build the Usage Tier Distribution tbody HTML.
+//   cohorts != null  -> render real per-user cohorts (Power BI Usage Threshold parity).
+//   cohorts == null  -> fall back to legacy team-percentile slicing (with banner shown above).
+// Returns the inner HTML for <tbody id="tierTableBody">.
+function buildTierTableBodyHTML(cohorts, sortedTeams, metrics, licenseCost) {
+    if (cohorts && cohorts.rows && cohorts.rows.length > 0) {
+        // Color coding mirrors the Adoption Journey storyline
+        const colorByName = {
+            'Power Users':    'var(--green)',
+            'Habitual Users': 'var(--copilot-cyan)',
+            'Novice Users':   'var(--copilot-blue)',
+            'Low Users':      'var(--copilot-orange)',
+            'Non Users':      'var(--red)'
+        };
+        let html = '';
+        cohorts.rows.forEach(r => {
+            const color = colorByName[r.name] || 'var(--text-primary)';
+            html += `<tr>
+                <td><span style="color:${color}; font-weight:700;">${r.name}</span></td>
+                <td>${r.count.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                <td>${r.actionsPerMonth.toFixed(0)}</td>
+                <td>$${r.investment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                <td>$${Math.round(r.monthlyValue).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                <td style="color: var(--green); font-weight: bold;">${r.roi.toFixed(1)}x</td>
+            </tr>`;
+        });
+        const t = cohorts.totals;
+        html += `<tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700;">
+            <td>ALL USERS</td>
+            <td>${t.count.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>${t.actionsPerMonth.toFixed(0)}</td>
+            <td>$${t.investment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>$${Math.round(t.monthlyValue).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td style="color: var(--green);">${t.roi.toFixed(1)}x</td>
+        </tr>`;
+        return html;
+    }
+
+    // ---- Legacy team-percentile fallback (aggregated CSV inputs) ----
+    const byActions = [...sortedTeams].sort((a, b) => b.actionsPerUser - a.actionsPerUser);
+    const totalTeams = byActions.length;
+    const tierDefs = [
+        { name: 'Top 10%',    color: 'var(--green)',          start: 0,                                                  end: Math.max(1, Math.round(totalTeams * 0.10)) },
+        { name: '75-90%',     color: 'var(--copilot-cyan)',   start: Math.max(1, Math.round(totalTeams * 0.10)),         end: Math.round(totalTeams * 0.25) },
+        { name: '50-75%',     color: 'var(--copilot-blue)',   start: Math.round(totalTeams * 0.25),                      end: Math.round(totalTeams * 0.50) },
+        { name: '25-50%',     color: 'var(--copilot-orange)', start: Math.round(totalTeams * 0.50),                      end: Math.round(totalTeams * 0.75) },
+        { name: 'Bottom 25%', color: 'var(--red)',            start: Math.round(totalTeams * 0.75),                      end: totalTeams },
+    ];
+    let totalActiveInTiers = 0;
+    let totalValueInTiers = 0;
+    let html = '';
+    tierDefs.forEach(tier => {
+        const slice = byActions.slice(tier.start, tier.end);
+        if (slice.length === 0) return;
+        const tierUsers = slice.reduce((s, t) => s + t.activeUsers, 0);
+        const tierWeekly = slice.reduce((s, t) => s + t.weeklyActions, 0);
+        const tierAvgWeekly = tierUsers > 0 ? tierWeekly / tierUsers : 0;
+        const tierMonthly = tierAvgWeekly * 4.33;
+        const tierMonthlyVal = slice.reduce((s, t) => s + (t.monthlyValue || 0), 0);
+        const tierInvestment = tierUsers * licenseCost;
+        const tierRoi = tierInvestment > 0 ? (tierMonthlyVal / tierInvestment) : 0;
+        totalActiveInTiers += tierUsers;
+        totalValueInTiers += tierMonthlyVal;
+        html += `<tr>
+            <td><span style="color:${tier.color}; font-weight:700;">${tier.name}</span></td>
+            <td>${tierUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>${tierMonthly.toFixed(0)}</td>
+            <td>$${tierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td>$${Math.round(tierMonthlyVal).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+            <td style="color: var(--green); font-weight: bold;">${tierRoi.toFixed(1)}x</td>
+        </tr>`;
+    });
+    const totalTierInvestment = totalActiveInTiers * licenseCost;
+    const allRoi = totalTierInvestment > 0 ? (totalValueInTiers / totalTierInvestment) : 0;
+    html += `<tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700;">
+        <td>ALL USERS</td>
+        <td>${totalActiveInTiers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+        <td>${totalActiveInTiers > 0 ? (sortedTeams.reduce((s, t) => s + t.monthlyActions, 0) / totalActiveInTiers).toFixed(0) : '0'}</td>
+        <td>$${totalTierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+        <td>$${Math.round(totalValueInTiers).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+        <td style="color: var(--green);">${allRoi.toFixed(1)}x</td>
+    </tr>`;
+    return html;
+}
+
+// Warning banner shown above the tier table when input is an aggregated CSV (not per-person Viva).
+function buildTierAccuracyBanner(uploadedData) {
+    if (uploadedData && uploadedData.isVivaInsights) return ''; // real cohorts available — no banner needed
+    return `<div style="background: rgba(245, 158, 11, 0.1); border: 1px solid var(--copilot-orange, #F59E0B); border-radius: 8px; padding: 0.75rem 1rem; margin: 0 0 1rem; font-size: 0.85rem; color: var(--text-secondary);">
+        <strong style="color: var(--copilot-orange, #F59E0B);">⚠️ Approximate cohorts</strong> &mdash;
+        your upload is aggregated by ${uploadedData && uploadedData.groupLabel ? uploadedData.groupLabel.toLowerCase() : 'group'},
+        so we cannot identify individual users. Tiers below are computed by grouping
+        ${uploadedData && uploadedData.groupLabel ? uploadedData.groupLabel.toLowerCase() : 'groups'} by their average
+        actions per user, not by user-level percentiles. For exact per-user cohorts
+        (Power / Habitual / Novice / Low / Non-users matching the
+        <a href="https://aka.ms/superuserimpact" target="_blank" style="color: var(--copilot-cyan);">Super User Impact</a> report),
+        upload a Viva Insights person-level export instead.
+    </div>`;
 }
 
 // Parse a single CSV line (handles commas in quotes)
@@ -978,50 +1447,10 @@ function switchTimePeriod(period) {
     const licenseCost = config.licenseCost;
 
     // --- Rebuild tier table body ---
-    const byActions = [...teams].sort((a, b) => b.actionsPerUser - a.actionsPerUser);
-    const totalTeams = byActions.length;
-    const tierDefs = [
-        { name: 'Top 10%',    color: 'var(--green)',          start: 0,                                    end: Math.max(1, Math.round(totalTeams * 0.10)) },
-        { name: '75-90%',     color: 'var(--copilot-cyan)',   start: Math.max(1, Math.round(totalTeams * 0.10)), end: Math.round(totalTeams * 0.25) },
-        { name: '50-75%',     color: 'var(--copilot-blue)',   start: Math.round(totalTeams * 0.25),        end: Math.round(totalTeams * 0.50) },
-        { name: '25-50%',     color: 'var(--copilot-orange)', start: Math.round(totalTeams * 0.50),        end: Math.round(totalTeams * 0.75) },
-        { name: 'Bottom 25%', color: 'var(--red)',            start: Math.round(totalTeams * 0.75),        end: totalTeams },
-    ];
-
-    let tierRows = '';
-    let totalActiveInTiers = 0;
-    let totalValueInTiers = 0;
-    tierDefs.forEach(tier => {
-        const slice = byActions.slice(tier.start, tier.end);
-        if (slice.length === 0) return;
-        const tierUsers = slice.reduce((s, t) => s + t.activeUsers, 0);
-        const tierWeekly = slice.reduce((s, t) => s + t.weeklyActions, 0);
-        const tierAvgWeekly = tierUsers > 0 ? tierWeekly / tierUsers : 0;
-        const tierMonthly = tierAvgWeekly * 4.33;
-        const tierMonthlyVal = slice.reduce((s, t) => s + t.monthlyValue, 0);
-        const tierInvestment = tierUsers * licenseCost;
-        const tierRoi = tierInvestment > 0 ? (tierMonthlyVal / tierInvestment).toFixed(1) : '0.0';
-        totalActiveInTiers += tierUsers;
-        totalValueInTiers += tierMonthlyVal;
-        tierRows += `<tr>
-            <td><span style="color:${tier.color}; font-weight:700;">${tier.name}</span></td>
-            <td>${tierUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td>${tierMonthly.toFixed(0)}</td>
-            <td>$${tierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td>$${tierMonthlyVal.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td style="color: var(--green); font-weight: bold;">${tierRoi}x</td>
-        </tr>`;
-    });
-    const totalTierInvestment = totalActiveInTiers * licenseCost;
-    const allRoi = totalTierInvestment > 0 ? (totalValueInTiers / totalTierInvestment).toFixed(1) : '0.0';
-    tierRows += `<tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700;">
-        <td>ALL USERS</td>
-        <td>${totalActiveInTiers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-        <td>${totalActiveInTiers > 0 ? (teams.reduce((s,t) => s + t.monthlyActions, 0) / totalActiveInTiers).toFixed(0) : '0'}</td>
-        <td>$${totalTierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-        <td>$${totalValueInTiers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-        <td style="color: var(--green);">${allRoi}x</td>
-    </tr>`;
+    // Use real per-user cohorts (Power BI Usage Threshold parity) when Viva data is loaded,
+    // otherwise the helper falls back to legacy team-percentile slicing.
+    const periodCohorts = computeCohortsForPeriod(period);
+    const tierRows = buildTierTableBodyHTML(periodCohorts, teams, null, licenseCost);
 
     const tierBody = document.getElementById('tierTableBody');
     if (tierBody) tierBody.innerHTML = tierRows;
@@ -1212,57 +1641,23 @@ function buildProjectionTables(metrics, sortedTeams) {
         `);
 
     // ---- USAGE TIER DISTRIBUTION ----
-    // Sort teams by actions per user, split into super user report tiers
-    const byActions = [...sortedTeams].sort((a, b) => b.actionsPerUser - a.actionsPerUser);
-    const totalTeams = byActions.length;
-    // Tier boundaries: Top 10%, 75-90%, 50-75%, 25-50%, Bottom 25%
-    const tierDefs = [
-        { name: 'Top 10%',    color: 'var(--green)',          start: 0,                                    end: Math.max(1, Math.round(totalTeams * 0.10)) },
-        { name: '75-90%',     color: 'var(--copilot-cyan)',   start: Math.max(1, Math.round(totalTeams * 0.10)), end: Math.round(totalTeams * 0.25) },
-        { name: '50-75%',     color: 'var(--copilot-blue)',   start: Math.round(totalTeams * 0.25),        end: Math.round(totalTeams * 0.50) },
-        { name: '25-50%',     color: 'var(--copilot-orange)', start: Math.round(totalTeams * 0.50),        end: Math.round(totalTeams * 0.75) },
-        { name: 'Bottom 25%', color: 'var(--red)',            start: Math.round(totalTeams * 0.75),        end: totalTeams },
-    ];
-
-    let tierRows = '';
-    tierDefs.forEach(tier => {
-        const slice = byActions.slice(tier.start, tier.end);
-        if (slice.length === 0) return;
-
-        const tierUsers = slice.reduce((s, t) => s + t.activeUsers, 0);
-        const tierWeekly = slice.reduce((s, t) => s + t.weeklyActions, 0);
-        const tierAvgWeekly = tierUsers > 0 ? tierWeekly / tierUsers : 0;
-        const tierMonthly = tierAvgWeekly * 4.33;
-        const tierMonthlyVal = slice.reduce((s, t) => s + t.monthlyValue, 0);
-        const tierInvestment = tierUsers * licenseCost;
-        const tierRoi = tierInvestment > 0 ? (tierMonthlyVal / tierInvestment).toFixed(1) : '0.0';
-
-        tierRows += `<tr>
-            <td><span style="color:${tier.color}; font-weight:700;">${tier.name}</span></td>
-            <td>${tierUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td>${tierMonthly.toFixed(0)}</td>
-            <td>$${tierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td>$${tierMonthlyVal.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-            <td style="color: var(--green); font-weight: bold;">${tierRoi}x</td>
-        </tr>`;
-    });
-
-    // Totals row — investment is based on all licensed users (you pay for every license)
-    const totalTierInvestment = totalUsers * licenseCost;
-    tierRows += `<tr style="border-top: 2px solid var(--copilot-blue); font-weight: 700;">
-        <td>ALL USERS</td>
-        <td>${activeUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-        <td>${avgMonthly.toFixed(0)}</td>
-        <td>$${totalTierInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-        <td>$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-        <td style="color: var(--green);">${metrics.roiMultiple.toFixed(1)}x</td>
-    </tr>`;
+    // If Viva Insights per-person data is loaded, render real Usage Threshold cohorts.
+    // Otherwise fall back to legacy team-percentile slicing (with an accuracy banner).
+    const tierCohorts = uploadedData.isVivaInsights ? (uploadedData.personCohorts || computeCohortsForPeriod('all')) : null;
+    const tierRows = buildTierTableBodyHTML(tierCohorts, sortedTeams, metrics, licenseCost);
+    const tierBanner = buildTierAccuracyBanner(uploadedData);
+    const tierColumnLabel = tierCohorts ? 'User Cohort' : 'User Tier';
+    const tierColumnTip = tierCohorts
+        ? 'Per-user Usage Threshold cohorts. Power Users = avg ≥20 actions/wk with ≥9 of 12 weeks active. Habitual = ≥8 + habit. Novice = ≥1. Low = >0. Non-users = 0. Matches the Power BI Super User Impact report.'
+        : 'Teams ranked by actions per user and grouped into percentile bands. Top 10% are your champions; Bottom 25% your biggest growth opportunity. Note: not true per-user tiers — upload a Viva Insights per-person export for those.';
 
     const tierHtml = section('Usage Tier Value Distribution', `
         <div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
+            ${tierBanner}
             <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary);">
-                ${uploadedData.groupLabel || 'Teams'} segmented into performance tiers by Copilot actions per user.
-                Investment at $${licenseCost}/user/month.<br>
+                ${tierCohorts
+                    ? `Real per-user Usage Threshold cohorts based on ${Object.keys(uploadedData.personIndex).length.toLocaleString()} distinct users. Investment at $${licenseCost}/user/month.`
+                    : `${uploadedData.groupLabel || 'Teams'} segmented into performance tiers by Copilot actions per user. Investment at $${licenseCost}/user/month.`}<br>
                 <a href="https://jordankingisalive.github.io/CopilotROICalculator/Start%20Here.html" target="_blank" style="color: var(--copilot-cyan); font-weight: 600; text-decoration: none;">🚀 Explore the Adoption Journey to move users up tiers →</a>
             </p>
             ${uploadedData.sortedDates && uploadedData.sortedDates.length > 4 ? `<div class="time-toggle-bar" style="display:flex; justify-content:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
@@ -1275,7 +1670,7 @@ function buildProjectionTables(metrics, sortedTeams) {
             <p id="tierPeriodLabel" style="text-align:center; margin-bottom:0.5rem; color: var(--copilot-cyan); font-weight:600; font-size:0.9rem;">Entire Period</p>` : ''}
             <table>
                 <thead>
-                    <tr><th>User Tier ${tip('Users ranked by actions per user and grouped into percentile bands. Top 10% are your champions who can mentor others; Bottom 25% are your biggest growth opportunity.')}</th><th>Active Users<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/week</span></th><th>Actions/Month<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/user</span> ${tip('Average monthly Copilot actions per user in this tier.')}</th><th>Monthly Investment<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">total</span> ${tip('Number of active users in this tier × license cost per month.')}</th><th>Monthly Value<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">projected</span> ${tip('Productivity value generated by this tier based on their actions and the configured time savings.')}</th><th>ROI<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">value÷cost</span> ${tip('Monthly value ÷ monthly investment for this tier. Shows which user segments generate the most return.')}</th></tr>
+                    <tr><th>${tierColumnLabel} ${tip(tierColumnTip)}</th><th>${tierCohorts ? 'Users' : 'Active Users'}<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">${tierCohorts ? 'count' : 'avg/week'}</span></th><th>Actions/Month<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">avg/user</span> ${tip('Average monthly Copilot actions per user in this cohort.')}</th><th>Monthly Investment<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">total</span> ${tip('Number of users in this cohort × license cost per month.')}</th><th>Monthly Value<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">projected</span> ${tip('Productivity value generated by this cohort based on their actions and the configured time savings.')}</th><th>ROI<br><span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">value÷cost</span> ${tip('Monthly value ÷ monthly investment for this cohort. Shows which user segments generate the most return.')}</th></tr>
                 </thead>
                 <tbody id="tierTableBody">${tierRows}</tbody>
             </table>
@@ -2139,27 +2534,40 @@ function generateStoryNarrative() {
     const weeks = config.analysisWeeks;
     const dateRange = uploadedData.dateRange || `${weeks} weeks`;
 
-    // Tier breakdown
+    // Tier breakdown — prefer real per-user cohorts when Viva data is loaded
     const byActions = [...sortedTeams].sort((a, b) => b.actionsPerUser - a.actionsPerUser);
     const totalTeams = byActions.length;
-    const tierDefs = [
-        { name: 'Top 10%', start: 0, end: Math.max(1, Math.round(totalTeams * 0.10)) },
-        { name: '75th–90th percentile', start: Math.max(1, Math.round(totalTeams * 0.10)), end: Math.round(totalTeams * 0.25) },
-        { name: '50th–75th percentile', start: Math.round(totalTeams * 0.25), end: Math.round(totalTeams * 0.50) },
-        { name: '25th–50th percentile', start: Math.round(totalTeams * 0.50), end: Math.round(totalTeams * 0.75) },
-        { name: 'Bottom 25%', start: Math.round(totalTeams * 0.75), end: totalTeams },
-    ];
-    const tierSummaries = tierDefs.map(tier => {
-        const slice = byActions.slice(tier.start, tier.end);
-        if (slice.length === 0) return null;
-        const tierUsers = slice.reduce((s, t) => s + t.activeUsers, 0);
-        const tierWeekly = slice.reduce((s, t) => s + t.weeklyActions, 0);
-        const tierAvg = tierUsers > 0 ? (tierWeekly / tierUsers) * 4.33 : 0;
-        const tierVal = slice.reduce((s, t) => s + t.monthlyValue, 0);
-        const tierInvest = tierUsers * config.licenseCost;
-        const tierRoi = tierInvest > 0 ? (tierVal / tierInvest).toFixed(1) : '0.0';
-        return { name: tier.name, users: tierUsers, avgMonthly: tierAvg.toFixed(0), value: usd(tierVal), roi: tierRoi + 'x' };
-    }).filter(Boolean);
+    let tierSummaries;
+    if (uploadedData.isVivaInsights && uploadedData.personCohorts && uploadedData.personCohorts.rows) {
+        tierSummaries = uploadedData.personCohorts.rows
+            .filter(r => r.count > 0)
+            .map(r => ({
+                name: r.name,
+                users: r.count,
+                avgMonthly: r.actionsPerMonth.toFixed(0),
+                value: usd(r.monthlyValue),
+                roi: r.roi.toFixed(1) + 'x'
+            }));
+    } else {
+        const tierDefs = [
+            { name: 'Top 10%', start: 0, end: Math.max(1, Math.round(totalTeams * 0.10)) },
+            { name: '75th–90th percentile', start: Math.max(1, Math.round(totalTeams * 0.10)), end: Math.round(totalTeams * 0.25) },
+            { name: '50th–75th percentile', start: Math.round(totalTeams * 0.25), end: Math.round(totalTeams * 0.50) },
+            { name: '25th–50th percentile', start: Math.round(totalTeams * 0.50), end: Math.round(totalTeams * 0.75) },
+            { name: 'Bottom 25%', start: Math.round(totalTeams * 0.75), end: totalTeams },
+        ];
+        tierSummaries = tierDefs.map(tier => {
+            const slice = byActions.slice(tier.start, tier.end);
+            if (slice.length === 0) return null;
+            const tierUsers = slice.reduce((s, t) => s + t.activeUsers, 0);
+            const tierWeekly = slice.reduce((s, t) => s + t.weeklyActions, 0);
+            const tierAvg = tierUsers > 0 ? (tierWeekly / tierUsers) * 4.33 : 0;
+            const tierVal = slice.reduce((s, t) => s + t.monthlyValue, 0);
+            const tierInvest = tierUsers * config.licenseCost;
+            const tierRoi = tierInvest > 0 ? (tierVal / tierInvest).toFixed(1) : '0.0';
+            return { name: tier.name, users: tierUsers, avgMonthly: tierAvg.toFixed(0), value: usd(tierVal), roi: tierRoi + 'x' };
+        }).filter(Boolean);
+    }
 
     // Top 5 teams
     const top5 = sortedTeams.slice(0, 5).map((t, i) => `${i + 1}. ${t.team} — ${fmt(t.activeUsers)} active users, ${fmtD(t.actionsPerUser, 1)} actions/user/week, ${usd(t.monthlyValue)}/month`);
@@ -2895,27 +3303,50 @@ async function exportExecutiveDeck() {
             });
         };
 
-        // Compute tier data
+        // Compute tier data — prefer real per-user cohorts when Viva data is loaded
         const byActions = [...sortedTeams].sort((a, b) => b.actionsPerUser - a.actionsPerUser);
         const totalTeams = byActions.length;
-        const tierDefs = [
-            { name: 'Top 10%', start: 0, end: Math.max(1, Math.round(totalTeams * 0.10)), color: GREEN },
-            { name: '75\u201390%', start: Math.max(1, Math.round(totalTeams * 0.10)), end: Math.round(totalTeams * 0.25), color: CYAN },
-            { name: '50\u201375%', start: Math.round(totalTeams * 0.25), end: Math.round(totalTeams * 0.50), color: CYAN },
-            { name: '25\u201350%', start: Math.round(totalTeams * 0.50), end: Math.round(totalTeams * 0.75), color: GOLD },
-            { name: 'Bottom 25%', start: Math.round(totalTeams * 0.75), end: totalTeams, color: RED },
-        ];
-        const tierData = tierDefs.map(tier => {
-            const slice = byActions.slice(tier.start, tier.end);
-            const users = slice.reduce((s, t) => s + t.activeUsers, 0);
-            const weeklyAct = slice.reduce((s, t) => s + t.weeklyActions, 0);
-            const monthly = weeklyAct * 4.33;
-            const actPerUser = users > 0 ? monthly / users : 0;
-            const value = slice.reduce((s, t) => s + t.monthlyValue, 0);
-            const invest = users * config.licenseCost;
-            const roi = invest > 0 ? value / invest : 0;
-            return { ...tier, users, monthly: Math.round(monthly), actPerUser: Math.round(actPerUser), value, invest, roi };
-        }).filter(t => t.users > 0);
+        let tierData;
+        if (uploadedData.isVivaInsights && uploadedData.personCohorts && uploadedData.personCohorts.rows) {
+            const cohortColor = {
+                'Power Users':    GREEN,
+                'Habitual Users': CYAN,
+                'Novice Users':   CYAN,
+                'Low Users':      GOLD,
+                'Non Users':      RED
+            };
+            tierData = uploadedData.personCohorts.rows
+                .filter(r => r.count > 0)
+                .map(r => ({
+                    name: r.name,
+                    color: cohortColor[r.name] || CYAN,
+                    users: r.count,
+                    monthly: Math.round(r.actionsPerMonth * r.count),
+                    actPerUser: Math.round(r.actionsPerMonth),
+                    value: r.monthlyValue,
+                    invest: r.investment,
+                    roi: r.roi
+                }));
+        } else {
+            const tierDefs = [
+                { name: 'Top 10%', start: 0, end: Math.max(1, Math.round(totalTeams * 0.10)), color: GREEN },
+                { name: '75\u201390%', start: Math.max(1, Math.round(totalTeams * 0.10)), end: Math.round(totalTeams * 0.25), color: CYAN },
+                { name: '50\u201375%', start: Math.round(totalTeams * 0.25), end: Math.round(totalTeams * 0.50), color: CYAN },
+                { name: '25\u201350%', start: Math.round(totalTeams * 0.50), end: Math.round(totalTeams * 0.75), color: GOLD },
+                { name: 'Bottom 25%', start: Math.round(totalTeams * 0.75), end: totalTeams, color: RED },
+            ];
+            tierData = tierDefs.map(tier => {
+                const slice = byActions.slice(tier.start, tier.end);
+                const users = slice.reduce((s, t) => s + t.activeUsers, 0);
+                const weeklyAct = slice.reduce((s, t) => s + t.weeklyActions, 0);
+                const monthly = weeklyAct * 4.33;
+                const actPerUser = users > 0 ? monthly / users : 0;
+                const value = slice.reduce((s, t) => s + t.monthlyValue, 0);
+                const invest = users * config.licenseCost;
+                const roi = invest > 0 ? value / invest : 0;
+                return { ...tier, users, monthly: Math.round(monthly), actPerUser: Math.round(actPerUser), value, invest, roi };
+            }).filter(t => t.users > 0);
+        }
 
         const monthlyValuePerUser = metrics.totalActiveUsers > 0 ? metrics.valuePerMonth / metrics.totalActiveUsers : 0;
         const breakEvenActions = (config.licenseCost / ((config.minutesPerAction / 60) * config.professionalRate));

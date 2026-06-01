@@ -1,3 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M365 Copilot ROI - Live Demo Report</title>
+    <link rel="stylesheet" href="styles.css?v=29">
+    <script type="text/javascript">(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y)})(window,document,"clarity","script","wt5uwqabv0");</script>
+    <style>
+        .demo-banner{background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:.75rem 1.5rem;text-align:center;font-size:.95rem;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.15)}
+        .demo-banner a{color:#fff;text-decoration:underline;margin-left:.5rem}
+        .demo-loading{min-height:80vh;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#F1F5F9}
+    </style>
+</head>
+<body>
+    <div class="demo-banner">
+        &#127919; You are viewing the live demo (27 organizations &#183; 6,500 users).
+        <a href="index.html">Use your own data &#8594;</a>
+    </div>
+
+    <div class="container">
+        <div class="demo-loading">
+            <div class="loading-spinner"></div>
+            <p style="margin-top:1.5rem;font-size:1.1rem;">Loading demo report&#8230;</p>
+        </div>
+    </div>
+
+    <footer style="text-align:center;padding:1rem;color:#94A3B8;font-size:.85rem">
+        M365 Copilot Productivity ROI Calculator Suite | Demo Report |
+        <a href="index.html" style="color:#00D4FF;">Back to Calculator</a>
+    </footer>
+
+    <script id="demoData" type="text/csv">
 Organization (Aggregated),Enabled Users,% Active Users,Average Copilot Actions,Avg Active Days,% Power Users,Date
 Contoso Ltd,190,33.9%,4.4,1.5,,2025-03-30 00:00:00
 Contoso Ltd,191,25.4%,3.9,1.4,,2025-04-06 00:00:00
@@ -1322,3 +1355,65 @@ Wingtip Toys,326,70.0%,17.4,3.1,12.8%,2026-02-08 00:00:00
 Wingtip Toys,328,64.6%,22.0,3.8,15.9%,2026-02-15 00:00:00
 Wingtip Toys,330,60.6%,24.8,3.9,17.2%,2026-02-22 00:00:00
 Wingtip Toys,333,78.2%,20.4,3.8,19.0%,2026-03-01 00:00:00
+
+    </script>
+
+    <script src="lib/jspdf.umd.min.js"></script>
+    <script src="lib/html2canvas.min.js"></script>
+    <script src="lib/docx.umd.js"></script>
+    <script src="lib/pptxgen.bundle.js"></script>
+    <script src="lib/jszip.min.js"></script>
+    <script src="script.js?v=31"></script>
+
+    <script>
+        (function() {
+            function boot() {
+                try {
+                    var csv = document.getElementById('demoData').textContent.trim();
+                    if (typeof loadDemoReportInstant === 'function') {
+                        loadDemoReportInstant(csv);
+                    } else {
+                        window.location.replace('index.html');
+                    }
+                } catch (e) {
+                    console.error('Demo bootstrap failed:', e);
+                    window.location.replace('index.html');
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', boot);
+            } else {
+                boot();
+            }
+        })();
+    </script>
+
+    <script>
+        (function() {
+            var tip = document.createElement('div');
+            tip.id = 'global-tooltip';
+            document.body.appendChild(tip);
+            document.addEventListener('mouseenter', function(e) {
+                var it = e.target.closest && e.target.closest('.info-tip');
+                if (!it) return;
+                var te = it.querySelector('.tip-text');
+                if (!te) return;
+                tip.textContent = te.textContent;
+                tip.classList.add('visible');
+                var r = it.getBoundingClientRect();
+                var t = r.top - tip.offsetHeight - 8;
+                var l = r.left - tip.offsetWidth + r.width;
+                if (t < 8) t = r.bottom + 8;
+                if (l < 8) l = 8;
+                tip.style.top = t + 'px';
+                tip.style.left = l + 'px';
+            }, true);
+            document.addEventListener('mouseleave', function(e) {
+                var it = e.target.closest && e.target.closest('.info-tip');
+                if (!it) return;
+                tip.classList.remove('visible');
+            }, true);
+        })();
+    </script>
+</body>
+</html>

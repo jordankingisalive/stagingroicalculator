@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Adoption Insights — M365 Copilot ROI Calculator</title>
-    <link rel="stylesheet" href="styles.css?v=29">
+    <link rel="stylesheet" href="styles.css?v=30">
     <style>
         .insights-card { background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
         .insights-card h2 { color: var(--text-primary, #F1F5F9); margin: 0 0 0.5rem; font-size: 1.4rem; }
@@ -36,13 +36,12 @@
         </header>
         <nav class="nav-buttons" id="nav"></nav>
         <main id="main"></main>
-        <footer>
-            <p>M365 Copilot Productivity ROI Calculator Suite | All data processed locally in your browser</p>
-        </footer>
+        <div id="footer"></div>
     </div>
-    <script src="insights-shared.js?v=1"></script>
+    <script src="insights-shared.js?v=2"></script>
     <script>
         document.getElementById('nav').outerHTML = InsightsShared.renderNav('insights.html');
+        document.getElementById('footer').outerHTML = InsightsShared.renderFooter();
         (function init() {
             const main = document.getElementById('main');
             const data = InsightsShared.loadSharedData();
@@ -74,9 +73,10 @@
             const trajectorySvg = InsightsShared.svgStackedArea(trajectory, { width: 880, height: 320 });
             const trajectoryCard = `
                 <div class="insights-card">
-                    <h2>Cohort trajectory</h2>
+                    <h2>Cohort trajectory ${InsightsShared.tooltip({ label: 'How many users are in each Usage Threshold cohort at the end of each weekly snapshot.', math: 'For each person at each week W: avg12(W) = mean of actions over [W-77d, W], habit12(W) = COUNTROWS(actions>=1 over that window) >= 9. Power = avg12>=20 AND habit; Habitual = avg12>=8 AND habit; Novice = avg12>=1; Low = avg12>0; else Non.', source: 'Power BI Super User Adoption template (Usage Threshold calculated column).' })}</h2>
                     <p class="lede">Per-user threshold reclassified at each week's trailing 12-week window. Shows whether your base is shifting up the engagement ladder or stalling.</p>
                     <div class="chart-wrapper">${trajectorySvg}</div>
+                    ${InsightsShared.mathBlock({ label: 'Cohort assignment per week', formula: 'avg12 = mean(actions[W-77d..W])  habit12 = count(actions>=1 in window) >= 9\nPower    : avg12 >= 20 AND habit12\nHabitual : avg12 >=  8 AND habit12\nNovice   : avg12 >=  1\nLow      : avg12 >   0\nNon      : avg12 =   0', note: 'Stacked area = persons-per-cohort at each weekly snapshot. Re-classification at each week mirrors the Power BI Adoption template.' })}
                 </div>`;
 
             // ── Migration matrix (last 4w vs prior 4w) ──
@@ -104,7 +104,7 @@
                 });
                 migrationCard = `
                     <div class="insights-card">
-                        <h2>Cohort migration (last 4 weeks vs prior 4 weeks)</h2>
+                        <h2>Cohort migration (last 4 weeks vs prior 4 weeks) ${InsightsShared.tooltip({ label: 'How many users moved up, stayed, or moved down in cohort between the two 4-week windows.', math: 'For each person P: priorCohort = cohort at week (latest - 4). recentCohort = cohort at latest week. Matrix[priorCohort][recentCohort] += 1. Upper triangle (ti<fi) = moved UP; diagonal = stayed; lower (ti>fi) = moved DOWN.' })}</h2>
                         <p class="lede">Rows = where each user was at <strong>${migration.priorLabel}</strong>. Columns = where they are at <strong>${migration.recentLabel}</strong>. Green = moved up, red = moved down, neutral = stayed.</p>
                         <div class="kpi-row">
                             <div class="kpi" style="border-left-color:#10b981;"><div class="label">Moved Up</div><div class="value">${InsightsShared.fmtInt(upTotal)}</div><div class="sub">${InsightsShared.fmtPct(upTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
@@ -119,6 +119,7 @@
                                 <tbody>${rowsHtml}</tbody>
                             </table>
                         </div>
+                        ${InsightsShared.mathBlock({ label: 'Migration math', formula: 'priorCohort(P)  = cohort at week (latest - 4)\nrecentCohort(P) = cohort at week  latest\nUp   = users where recent index < prior index   (ladder up)\nSame = users where recent index = prior index\nDown = users where recent index > prior index   (ladder down)', note: 'Order: Power(0), Habitual(1), Novice(2), Low(3), Non(4).' })}
                     </div>`;
             }
 
@@ -132,7 +133,7 @@
                 }));
                 tthCard = `
                     <div class="insights-card">
-                        <h2>Time to habit</h2>
+                        <h2>Time to habit ${InsightsShared.tooltip({ label: 'How long it takes a typical user to graduate from first-touch to Habitual or Power status.', math: 'For each person P with any week classified Power or Habitual: firstAction = min(week where actions>0). firstHabit = min(week classified Power or Habitual). TTH(P) = (firstHabit - firstAction) / 7 days.' })}</h2>
                         <p class="lede">For each user who reached Power or Habitual status, weeks elapsed between their first non-zero action week and their first habit week. This is the #1 metric for whether onboarding is working.</p>
                         <div class="kpi-row">
                             <div class="kpi"><div class="label">Users Who Reached Habit</div><div class="value">${InsightsShared.fmtInt(tth.count)}</div><div class="sub">${InsightsShared.fmtPct(tth.count / Math.max(totalUsers,1) * 100, 1)} of total</div></div>
@@ -140,6 +141,7 @@
                             <div class="kpi"><div class="label">Mean Weeks</div><div class="value">${tth.mean.toFixed(1)}</div><div class="sub">average</div></div>
                         </div>
                         <div class="chart-wrapper">${InsightsShared.svgBarChart(histData, { width: 880, height: 260, color: '#00D4FF' })}</div>
+                        ${InsightsShared.mathBlock({ label: 'Time-to-habit per person', formula: 'TTH(P) weeks = (firstHabitWeek(P) - firstActionWeek(P)) / 7\nmedian = 50th percentile of {TTH(P) : P reached habit}\nmean   = sum(TTH) / count', note: 'Bar i = number of users whose TTH equals i weeks. The final bar (i+) = the right-tail bucket.' })}
                     </div>`;
             } else {
                 tthCard = `

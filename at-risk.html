@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Risk &amp; Waste — M365 Copilot ROI Calculator</title>
-    <link rel="stylesheet" href="styles.css?v=29">
+    <link rel="stylesheet" href="styles.css?v=30">
     <style>
         .insights-card { background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
         .insights-card h2 { color: var(--text-primary, #F1F5F9); margin: 0 0 0.5rem; font-size: 1.4rem; }
@@ -35,13 +35,12 @@
         </header>
         <nav class="nav-buttons" id="nav"></nav>
         <main id="main"></main>
-        <footer>
-            <p>M365 Copilot Productivity ROI Calculator Suite | All data processed locally in your browser</p>
-        </footer>
+        <div id="footer"></div>
     </div>
-    <script src="insights-shared.js?v=1"></script>
+    <script src="insights-shared.js?v=2"></script>
     <script>
         document.getElementById('nav').outerHTML = InsightsShared.renderNav('at-risk.html');
+        document.getElementById('footer').outerHTML = InsightsShared.renderFooter();
         (function init() {
             const main = document.getElementById('main');
             const data = InsightsShared.loadSharedData();
@@ -72,7 +71,7 @@
             // ── Render ──
             const wasteCard = `
                 <div class="waste-callout">
-                    <h2 style="margin:0 0 0.5rem;color:#F1F5F9;font-size:1.4rem;">License waste opportunity</h2>
+                    <h2 style="margin:0 0 0.5rem;color:#F1F5F9;font-size:1.4rem;">License waste opportunity ${InsightsShared.tooltip({ label: 'Licenses going to users with little or no usage activity.', math: 'wastedUsers = count(persons where current cohort in {Non, Low}). wastedSpend = wastedUsers &times; licenseCost. annualWaste = wastedSpend &times; 12. wastedValuePct = (NonValue + LowValue) / totalMonthlyValue &times; 100.' })}</h2>
                     <p style="color:#94A3B8;margin:0 0 1.5rem;">${wastedUsers} licenses sitting at <strong>Non</strong> or <strong>Low</strong> usage. Each one is paying full price for less than ${wastedValuePct < 1 ? wastedValuePct.toFixed(2) : wastedValuePct.toFixed(1)}% of total value generated.</p>
                     <div class="kpi-row">
                         <div class="kpi" style="border-left-color:#ef4444;">
@@ -99,6 +98,7 @@
                     <p style="color:#F1F5F9;font-size:0.9rem;margin:1rem 0 0;padding:0.75rem 1rem;background:rgba(255,255,255,0.05);border-radius:8px;">
                         <strong>Recommendation:</strong> reassign these ${wastedUsers} licenses to a pilot group of high-need users from your unlicensed pool, or pause them at next renewal. Either move recovers ${InsightsShared.fmtMoneyShort(annualWaste)} of annual exposure with negligible value loss.
                     </p>
+                    ${InsightsShared.mathBlock({ label: 'Waste math', formula: 'wastedUsers = |{P : cohort(P, latest) &isin; {Non Users, Low Users}}|\nwastedSpend = wastedUsers &times; licenseCost\nannualWaste = wastedSpend &times; 12\nwastedValuePct = (NonValue + LowValue) / totalMonthlyValue &times; 100' })}
                 </div>`;
 
             const atRiskKpis = `
@@ -156,11 +156,12 @@
 
             main.innerHTML = wasteCard + `
                 <div class="insights-card">
-                    <h2>At-risk Power &amp; Habitual users</h2>
-                    <p class="lede">Users whose peak cohort in the prior 8 weeks was Power or Habitual but who have now slipped down. Highest drop first — these are your CSM follow-up list.</p>
+                    <h2>At-risk Power &amp; Habitual users ${InsightsShared.tooltip({ label: 'Users who used to be Power or Habitual but have slipped to a lower cohort in the latest week.', math: 'For each person P: peakCohort = best (lowest-index) cohort across the prior 8 weeks. currentCohort = cohort at latest week. atRisk(P) = peakCohort &isin; {Power, Habitual} AND currentCohort index > peakCohort index. drop = currentIndex - peakIndex.' })}</h2>
+                    <p class="lede">Users whose peak cohort in the prior 8 weeks was Power or Habitual but who have now slipped down. Highest drop first &mdash; these are your CSM follow-up list.</p>
                     ${atRiskKpis}
                     ${filterUI}
                     ${tableHtml}
+                    ${InsightsShared.mathBlock({ label: 'At-risk math', formula: 'peakCohort(P)    = min-index cohort over weeks [latest-7..latest-1]\ncurrentCohort(P) = cohort at week latest\natRisk(P)        = (peakCohort &isin; {Power, Habitual}) AND (currentIndex > peakIndex)\ndrop(P)          = currentIndex - peakIndex\nrecentActions(P) = &Sigma; actions over last 4 weeks\navg12(P)         = mean(actions) over trailing 12-week window' })}
                 </div>`;
 
             window._atRisk = atRisk;

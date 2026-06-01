@@ -721,6 +721,78 @@ details.collapsible-section:not([open]) .toggle-chevron {
     line-height: 1.6;
 }
 
+/* Tooltip glyph + hover bubble (CSS-only, native title attr supplies the text).
+   Sits next to a card title or KPI label. Renders the encircled "i" character. */
+.cri-tip {
+    display: inline-block;
+    margin-left: 0.4rem;
+    cursor: help;
+    color: var(--text-secondary, #94A3B8);
+    font-size: 0.9em;
+    line-height: 1;
+    border-radius: 50%;
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+.cri-tip:hover,
+.cri-tip:focus {
+    color: var(--copilot-cyan, #00D4FF);
+    outline: none;
+    transform: scale(1.15);
+}
+
+/* Math callout: appears under a card body to explain how the number above was computed. */
+.cri-math {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: rgba(0, 212, 255, 0.06);
+    border-left: 3px solid var(--copilot-cyan, #00D4FF);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--text-secondary, #94A3B8);
+}
+.cri-math-label {
+    font-weight: 700;
+    color: var(--copilot-cyan, #00D4FF);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.72rem;
+    margin-bottom: 0.35rem;
+}
+.cri-math-formula {
+    display: block;
+    font-family: "Cascadia Mono", "Consolas", "Menlo", monospace;
+    font-size: 0.85rem;
+    color: var(--text-primary, #F1F5F9);
+    background: transparent;
+    padding: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.cri-math-note {
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary, #94A3B8);
+    line-height: 1.5;
+}
+
+/* Shared cross-page footer (rendered by InsightsShared.renderFooter()) */
+.cri-footer {
+    text-align: center;
+    padding: 2rem 1rem 3rem;
+    color: var(--text-secondary, #94A3B8);
+}
+.cri-footer p {
+    margin: 0.35rem 0;
+    font-size: 0.85rem;
+}
+.cri-footer-links a {
+    color: var(--copilot-cyan, #00D4FF);
+    text-decoration: none;
+    font-weight: 600;
+    margin: 0 0.15rem;
+}
+.cri-footer-links a:hover { text-decoration: underline; }
+
 /* Footer */
 footer {
     text-align: center;

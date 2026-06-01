@@ -445,6 +445,48 @@
         </header>`;
     }
 
+    // ── Tooltip + math-block helper ──────────────────────────────────────────
+    // tooltip({ label, math, source })  -> a small hover bubble (CSS-only) shown next to a section title.
+    //   label  - one-line plain-English description of what this metric/section means
+    //   math   - formal formula or rule. Use unicode &times; &divide; &ge; etc.
+    //   source - (optional) where the rule is defined, e.g. "Power BI Adoption template (Adoption M Code.txt)"
+    function tooltip(opts) {
+        opts = opts || {};
+        const label = String(opts.label || '').replace(/"/g, '&quot;');
+        const math = String(opts.math || '').replace(/"/g, '&quot;');
+        const source = opts.source ? `\n\nSource: ${String(opts.source).replace(/"/g, '&quot;')}` : '';
+        const title = `${label}\n\nMath: ${math}${source}`;
+        return `<span class="cri-tip" tabindex="0" title="${title}" aria-label="${title}">&#9432;</span>`;
+    }
+
+    // mathBlock({ label, formula, note })  -> small monospaced math callout under a card body
+    function mathBlock(opts) {
+        opts = opts || {};
+        const label   = opts.label   || 'Math';
+        const formula = opts.formula || '';
+        const note    = opts.note    || '';
+        return `<div class="cri-math">
+            <div class="cri-math-label">${label}</div>
+            <code class="cri-math-formula">${formula}</code>
+            ${note ? `<div class="cri-math-note">${note}</div>` : ''}
+        </div>`;
+    }
+
+    // ── Site-wide footer with reference links ────────────────────────────────
+    function renderFooter() {
+        return `<footer class="cri-footer">
+            <p>M365 Copilot Productivity ROI Calculator Suite &middot; All data processed locally in your browser</p>
+            <p class="cri-footer-links">
+                Reference:
+                <a href="https://microsoft.github.io/Analytics-Hub/" target="_blank" rel="noopener">Microsoft Analytics Hub</a>
+                &middot;
+                <a href="https://learn.microsoft.com/viva/insights/advanced/analyst/templates/microsoft-365-copilot-adoption" target="_blank" rel="noopener">Microsoft 365 Copilot Adoption Report</a>
+                &middot;
+                <a href="https://aka.ms/decodingsuperusage" target="_blank" rel="noopener">Super Usage Report</a>
+            </p>
+        </footer>`;
+    }
+
     // Expose
     global.InsightsShared = {
         STORAGE_KEY,
@@ -456,6 +498,9 @@
         renderEmptyState,
         renderNav,
         renderHeader,
+        renderFooter,
+        tooltip,
+        mathBlock,
         fmtInt,
         fmtMoney,
         fmtMoneyShort,

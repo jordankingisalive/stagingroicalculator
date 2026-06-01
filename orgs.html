@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Organizations — M365 Copilot ROI Calculator</title>
-    <link rel="stylesheet" href="styles.css?v=29">
+    <link rel="stylesheet" href="styles.css?v=30">
     <style>
         .insights-card { background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
         .insights-card h2 { color: var(--text-primary, #F1F5F9); margin: 0 0 0.5rem; font-size: 1.4rem; }
@@ -34,13 +34,12 @@
         </header>
         <nav class="nav-buttons" id="nav"></nav>
         <main id="main"></main>
-        <footer>
-            <p>M365 Copilot Productivity ROI Calculator Suite | All data processed locally in your browser</p>
-        </footer>
+        <div id="footer"></div>
     </div>
-    <script src="insights-shared.js?v=1"></script>
+    <script src="insights-shared.js?v=2"></script>
     <script>
         document.getElementById('nav').outerHTML = InsightsShared.renderNav('orgs.html');
+        document.getElementById('footer').outerHTML = InsightsShared.renderFooter();
         (function init() {
             const main = document.getElementById('main');
             const data = InsightsShared.loadSharedData();
@@ -114,8 +113,8 @@
 
             main.innerHTML = `
                 <div class="insights-card">
-                    <h2>${orgs.length} organizations</h2>
-                    <p class="lede">Aggregated using the Power BI "Organization (Aggregated)" rule (orgs with fewer than 5 distinct users or blank labels roll into <strong>Other</strong>). Click any org to expand its cohort breakdown.</p>
+                    <h2>${orgs.length} ${(data.groupLabel || 'organization').toLowerCase()}${orgs.length === 1 ? '' : 's'} ${InsightsShared.tooltip({ label: 'Distinct grouping values rolled up using the Power BI "Organization (Aggregated)" rule.', math: 'For each person P: group(P) = chosen grouping field (default Organization). If a group has <5 distinct persons or is blank/N/A, it rolls into "Other". Per group: monthlyValue = sum over its persons of cohort-specific monetized value (see Adoption Insights tooltip).' })}</h2>
+                    <p class="lede">Aggregated using the Power BI &ldquo;Organization (Aggregated)&rdquo; rule (groups with fewer than 5 distinct users or blank labels roll into <strong>Other</strong>). Click any row to expand its cohort breakdown.</p>
                     <div class="controls">
                         <label>Sort by:</label>
                         <select id="sortKey">
@@ -135,6 +134,7 @@
                     <div style="overflow-x:auto;">
                         <table class="org-table" id="orgTable"><thead></thead><tbody></tbody></table>
                     </div>
+                    ${InsightsShared.mathBlock({ label: 'Per-row math', formula: '% Habit+Power = (PowerUsers + HabitualUsers) / users  &times; 100\nAvg Actions/User/Week = mean over last 4 weeks of (sum(actions) / count(users with actions))\nTrend (4w)  = (recent4Avg - prior4Avg) / prior4Avg  &times; 100\nMonthly Value = &Sigma; cohort-weight &times; weekly_actions &times; minutesPerAction / 60 &times; professionalRate &times; 4.33\nROI = monthlyValue / (users &times; licenseCost)', note: 'Cohort weights reflect the Adjusted Compounding Adoption Hypothesis: Power=1.0, Habitual=0.7, Novice=0.4, Low=0.1, Non=0.' })}
                 </div>`;
             document.getElementById('sortKey').addEventListener('change', e => { window._sortKey = e.target.value; renderTable(); });
             document.getElementById('sortDir').addEventListener('change', e => { window._sortDir = parseInt(e.target.value); renderTable(); });

@@ -173,6 +173,7 @@
 </head>
 <body>
     <div class="changelog-container">
+        <nav class="nav-buttons" id="nav"></nav>
         <a href="index.html" class="back-link">
             ← Back to Calculator
         </a>
@@ -377,5 +378,14 @@
             </p>
         </div>
     </div>
+    <script src="insights-shared.js?v=2"></script>
+    <script>
+        (function(){
+            const nav = document.getElementById('nav');
+            if (nav && window.InsightsShared) {
+                nav.outerHTML = window.InsightsShared.renderNav('changelog.html');
+            }
+        })();
+    </script>
 </body>
 </html>

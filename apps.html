@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Apps &amp; Behavior — M365 Copilot ROI Calculator</title>
-    <link rel="stylesheet" href="styles.css?v=29">
+    <link rel="stylesheet" href="styles.css?v=30">
     <style>
         .insights-card { background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
         .insights-card h2 { color: var(--text-primary, #F1F5F9); margin: 0 0 0.5rem; font-size: 1.4rem; }
@@ -36,13 +36,12 @@
         </header>
         <nav class="nav-buttons" id="nav"></nav>
         <main id="main"></main>
-        <footer>
-            <p>M365 Copilot Productivity ROI Calculator Suite | All data processed locally in your browser</p>
-        </footer>
+        <div id="footer"></div>
     </div>
-    <script src="insights-shared.js?v=1"></script>
+    <script src="insights-shared.js?v=2"></script>
     <script>
         document.getElementById('nav').outerHTML = InsightsShared.renderNav('apps.html');
+        document.getElementById('footer').outerHTML = InsightsShared.renderFooter();
         (function init() {
             const main = document.getElementById('main');
             const data = InsightsShared.loadSharedData();
@@ -102,10 +101,11 @@
             const appBarData = appsRanked.slice(0, 12).map(a => ({ label: a.app, value: a.monthlyValue }));
             const attributionCard = `
                 <div class="insights-card">
-                    <h2>Monthly value attribution by app</h2>
+                    <h2>Monthly value attribution by app ${InsightsShared.tooltip({ label: 'Splits the total monthly productivity value across the apps your users actually performed actions in.', math: 'For each app A: actionsA = &Sigma; over all persons of (&Sigma; weekly app[A] actions). monthlyActionsA = actionsA / (weeks / 4.33). monthlyValueA = monthlyActionsA &times; minutesPerAction / 60 &times; professionalRate.' })}</h2>
                     <p class="lede">Action volume per app &times; ${cfg.minutesPerAction} min &times; $${cfg.professionalRate}/hr. Reveals which surface is doing the heavy lifting and where to invest training next.</p>
                     ${kpis}
                     <div style="overflow-x:auto;">${InsightsShared.svgHBarChart(appBarData, { width: 800, color: '#00D4FF', padL: 200, valueFmt: v => InsightsShared.fmtMoneyShort(v) })}</div>
+                    ${InsightsShared.mathBlock({ label: 'Per-app value', formula: 'actionsA       = &Sigma;over all persons, weeks of apps[A]\nmonthlyActionsA = actionsA / (numWeeks / 4.33)\nmonthlyValueA  = monthlyActionsA &times; minutesPerAction / 60 &times; professionalRate', note: 'Numerator comes straight from the per-app columns in your Viva export (e.g. "Copilot actions taken in Word").' })}
                 </div>`;
 
             // ── Per-cohort behavioral profile ──
@@ -138,9 +138,10 @@
 
             const profileCard = `
                 <div class="insights-card">
-                    <h2>Behavioral profile by cohort</h2>
+                    <h2>Behavioral profile by cohort ${InsightsShared.tooltip({ label: 'What share of each cohort\'s actions are happening in which app.', math: 'For each (cohort C, app A): actionsC,A = &Sigma; over persons in C of their A-app actions. totalC = &Sigma; over apps. share(C,A) = actionsC,A / totalC.' })}</h2>
                     <p class="lede">What share of each cohort's actions happen in which app. Shows the behavioral signature you want Novices to grow into.</p>
                     <div class="behavior-grid">${profileCards}</div>
+                    ${InsightsShared.mathBlock({ label: 'Cohort behavioral share', formula: 'actionsC,A = &Sigma; over persons P assigned to cohort C of (&Sigma; weekly app[A] actions)\nshare(C,A) = actionsC,A / &Sigma;over apps actionsC,A &times; 100', note: 'Cohort C is taken from each person\'s threshold at the LATEST week ("current cohort").' })}
                 </div>`;
 
             // ── Meeting impact ──
@@ -159,7 +160,7 @@
             const assistValue = monthlyAssistHrs * cfg.professionalRate;
             const meetingCard = `
                 <div class="insights-card">
-                    <h2>Meeting &amp; assist-hour impact</h2>
+                    <h2>Meeting &amp; assist-hour impact ${InsightsShared.tooltip({ label: 'Direct-measured time saved in meetings via Intelligent Recap and Copilot assist hours.', math: 'monthlyRecap = totalRecap / (weeks/4.33). recapHoursReclaimed = monthlyRecap &times; 0.5 hr (heuristic). recapValue = recapHoursReclaimed &times; professionalRate. assistValue = monthlyAssistHrs &times; professionalRate.' })}</h2>
                     <p class="lede">Intelligent recap and Copilot assist hours are measured directly by Viva. Modeled here at half an hour reclaimed per recap and full-rate for assist hours.</p>
                     <div class="kpi-row">
                         <div class="kpi"><div class="label">Intelligent Recap actions / mo</div><div class="value">${InsightsShared.fmtInt(monthlyRecap)}</div><div class="sub">across all users</div></div>
@@ -168,6 +169,7 @@
                         <div class="kpi" style="border-left-color:#00D4FF;"><div class="label">Copilot assist hours / mo</div><div class="value">${InsightsShared.fmtInt(monthlyAssistHrs)}</div><div class="sub">measured directly</div></div>
                         <div class="kpi" style="border-left-color:#00D4FF;"><div class="label">Assist-hour value</div><div class="value">${InsightsShared.fmtMoneyShort(assistValue)}/mo</div><div class="sub">straight-line</div></div>
                     </div>
+                    ${InsightsShared.mathBlock({ label: 'Meeting math', formula: 'monthlyRecap        = totalRecap / (weeks / 4.33)\nrecapHoursReclaimed = monthlyRecap &times; 0.5    (heuristic: half-hour per recap)\nrecapValue          = recapHoursReclaimed &times; professionalRate\nassistValue         = monthlyAssistHrs &times; professionalRate', note: 'The 0.5-hr-per-recap factor is conservative. Microsoft research has measured 1.0-1.5 hr per non-attended meeting reclaimed.' })}
                 </div>`;
 
             main.innerHTML = attributionCard + profileCard + meetingCard;

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Forecast &amp; Sensitivity — M365 Copilot ROI Calculator</title>
-    <link rel="stylesheet" href="styles.css?v=29">
+    <link rel="stylesheet" href="styles.css?v=30">
     <style>
         .insights-card { background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
         .insights-card h2 { color: var(--text-primary, #F1F5F9); margin: 0 0 0.5rem; font-size: 1.4rem; }
@@ -32,13 +32,12 @@
         </header>
         <nav class="nav-buttons" id="nav"></nav>
         <main id="main"></main>
-        <footer>
-            <p>M365 Copilot Productivity ROI Calculator Suite | All data processed locally in your browser</p>
-        </footer>
+        <div id="footer"></div>
     </div>
-    <script src="insights-shared.js?v=1"></script>
+    <script src="insights-shared.js?v=2"></script>
     <script>
         document.getElementById('nav').outerHTML = InsightsShared.renderNav('forecast.html');
+        document.getElementById('footer').outerHTML = InsightsShared.renderFooter();
         (function init() {
             const main = document.getElementById('main');
             const data = InsightsShared.loadSharedData();
@@ -116,7 +115,7 @@
 
             const forecastCard = `
                 <div class="insights-card">
-                    <h2>Forecast: % Habitual + Power Users</h2>
+                    <h2>Forecast: % Habitual + Power Users ${InsightsShared.tooltip({ label: 'Linear extrapolation of the % of users at Habitual or Power, projected 13 weeks out.', math: 'Fit ordinary least squares y = m&middot;x + b on the last min(8, available) weekly observations of pct(t) = (Power_t + Habitual_t) / totalUsers &times; 100. Project pct(t+k) = m&middot;(t+k)+b for k=1..13, clamped to [0,100].' })}</h2>
                     <p class="lede">Linear extrapolation of the last ${fitN} weeks of real cohort migration, projected ${projectN} weeks out. Slope ${slopePerWeek >= 0 ? '+' : ''}${slopePerWeek.toFixed(2)}pp / week.</p>
                     <div class="kpi-row">
                         <div class="kpi"><div class="label">Today</div><div class="value">${currentPct.toFixed(1)}%</div><div class="sub">${InsightsShared.fmtInt(series[series.length - 1].count)} users</div></div>
@@ -124,6 +123,7 @@
                         <div class="kpi" style="border-left-color:${slopePerWeek > 0 ? '#10b981' : '#ef4444'};"><div class="label">Trajectory</div><div class="value">${slopePerWeek >= 0 ? '+' : ''}${slopePerWeek.toFixed(2)}pp/w</div><div class="sub">${slopePerWeek > 0.5 ? 'strong growth' : slopePerWeek > 0 ? 'mild growth' : slopePerWeek > -0.5 ? 'flat' : 'declining'}</div></div>
                     </div>
                     <div style="overflow-x:auto;">${forecastSvg}</div>
+                    ${InsightsShared.mathBlock({ label: 'Linear regression', formula: 'For y_t = pct of habitual+power at week t over the last 8 weeks:\n   m = (n &Sigma;xy - &Sigma;x &Sigma;y) / (n &Sigma;x&sup2; - (&Sigma;x)&sup2;)\n   b = (&Sigma;y - m &Sigma;x) / n\nProjected pct(t+k) = clamp(m&middot;(t+k)+b, 0, 100)  for k = 1..13', note: 'A simple OLS fit. For datasets &lt; 8 weeks the available range is used. Slope is reported as percentage-points per week.' })}
                 </div>`;
 
             // ── Adjusted CAH valuation ──
@@ -146,7 +146,7 @@
 
             const cahCard = `
                 <div class="insights-card">
-                    <h2>Adjusted Copilot Assisted Hours valuation</h2>
+                    <h2>Adjusted Copilot Assisted Hours valuation ${InsightsShared.tooltip({ label: 'Alternate ROI model based on Viva-measured Copilot assisted hours instead of action&middot;minutes math.', math: 'adjustedMonthlyValue = (monthlyAssistHrs + monthlyRecap &times; 0.5) &times; penaltyFactor &times; professionalRate. adjustedRoi = adjustedMonthlyValue / monthlyInvestment.' })}</h2>
                     <p class="lede">Alternate ROI model. Instead of <code>actions &times; minutes</code>, value is computed from <strong>Copilot assisted hours</strong> measured directly by Viva, plus half of Intelligent Recap actions counted as reclaimed meeting hours, then dampened by a <strong>penalty factor</strong> to account for partial attribution.</p>
                     <div class="slider-control">
                         <label for="penalty">Penalty factor (1.0 = full credit)</label>
@@ -154,14 +154,16 @@
                         <span class="val" id="penaltyVal">1.00</span>
                     </div>
                     <div id="cahKpis"></div>
+                    ${InsightsShared.mathBlock({ label: 'Adjusted CAH formula', formula: 'recapHours          = monthlyRecap &times; 0.5\nadjustedMonthlyValue = (monthlyAssistHrs + recapHours) &times; penalty &times; professionalRate\nadjustedRoi          = adjustedMonthlyValue / (totalUsers &times; licenseCost)', note: 'Use penalty &lt; 1 to account for the fact that not all assist hours map 1:1 to net productivity. Conservative deployments often use 0.5-0.7.' })}
                 </div>`;
 
             // ── Sensitivity tornado ──
             const tornadoCard = `
                 <div class="insights-card">
-                    <h2>Sensitivity tornado</h2>
+                    <h2>Sensitivity tornado ${InsightsShared.tooltip({ label: 'Shows how much the monthly value swings when each assumption is perturbed ±25% from your current settings.', math: 'For each variable V in {minutesPerAction, professionalRate, licenseCost}: vUp = baselineWith(V&times;1.25) - baseline. vDn = baselineWith(V&times;0.75) - baseline. Bar length proportional to |vUp| + |vDn|. Longer bar = bigger lever.' })}</h2>
                     <p class="lede">How much does monthly value swing if each assumption changes &plusmn;25% from your current settings? The longer the bar, the more that variable matters.</p>
                     <div id="tornadoChart"></div>
+                    ${InsightsShared.mathBlock({ label: 'Sensitivity computation', formula: 'For each variable V perturbed by &plusmn;25%:\n  baseline = computeCohorts(cfg).monthlyValue\n  upDelta  = computeCohorts(cfg with V&times;1.25).monthlyValue - baseline\n  dnDelta  = computeCohorts(cfg with V&times;0.75).monthlyValue - baseline\nbarLength &prop; |upDelta| + |dnDelta|', note: 'Re-runs the full cohort valuation under each perturbation. Variables not shown have zero leverage on the model (e.g. dates).' })}
                 </div>`;
 
             main.innerHTML = forecastCard + cahCard + tornadoCard;

@@ -1124,6 +1124,15 @@ function toggleRecapDisplay() {
     </script>
     <script src="lib/jszip.min.js?v=22"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="insights-shared.js?v=1"></script>
+    <script>
+        (function(){
+            const nav = document.querySelector('.nav-buttons');
+            if (nav && window.InsightsShared) {
+                nav.outerHTML = window.InsightsShared.renderNav('roi-calculator.html');
+            }
+        })();
+    </script>
     <script>
         function exportToPDF() {
             const element = document.querySelector('.container');

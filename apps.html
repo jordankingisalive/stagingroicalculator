@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apps &amp; Behavior — M365 Copilot ROI Calculator</title>
+    <link rel="stylesheet" href="styles.css?v=29">
+    <style>
+        .insights-card { background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
+        .insights-card h2 { color: var(--text-primary, #F1F5F9); margin: 0 0 0.5rem; font-size: 1.4rem; }
+        .insights-card .lede { color: var(--text-secondary, #94A3B8); margin: 0 0 1.5rem; }
+        .behavior-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+        .behavior-card { background: var(--surface-raised, #253449); border-radius: 12px; padding: 1.25rem; border-top: 3px solid; }
+        .behavior-card h3 { margin: 0 0 0.75rem; color: var(--text-primary, #F1F5F9); font-size: 1rem; }
+        .app-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .app-row .name { flex: 0 0 130px; font-size: 0.85rem; color: var(--text-primary, #F1F5F9); }
+        .app-row .bar { flex: 1; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+        .app-row .bar-fill { height: 100%; background: var(--copilot-cyan, #00D4FF); }
+        .app-row .pct { flex: 0 0 50px; text-align: right; font-size: 0.8rem; color: var(--text-secondary, #94A3B8); font-variant-numeric: tabular-nums; }
+        .kpi-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .kpi { flex: 1 1 180px; background: var(--surface-raised, #253449); border-radius: 12px; padding: 1.25rem; border-left: 4px solid var(--copilot-cyan, #00D4FF); }
+        .kpi .label { font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+        .kpi .value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary, #F1F5F9); }
+        .kpi .sub { font-size: 0.8rem; color: var(--text-secondary, #94A3B8); margin-top: 0.25rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>Apps &amp; Behavior</h1>
+                    <p class="subtitle">Where the action happens — per-app attribution and the behavioral signature of your Power Users</p>
+                </div>
+            </div>
+        </header>
+        <nav class="nav-buttons" id="nav"></nav>
+        <main id="main"></main>
+        <footer>
+            <p>M365 Copilot Productivity ROI Calculator Suite | All data processed locally in your browser</p>
+        </footer>
+    </div>
+    <script src="insights-shared.js?v=1"></script>
+    <script>
+        document.getElementById('nav').outerHTML = InsightsShared.renderNav('apps.html');
+        (function init() {
+            const main = document.getElementById('main');
+            const data = InsightsShared.loadSharedData();
+            if (!data) { InsightsShared.renderEmptyState(main, 'Apps & Behavior'); return; }
+            render(data, main);
+        })();
+
+        function render(data, main) {
+            const personIndex = data.personIndex;
+            const cfg = data.config;
+
+            // Detect per-app data
+            const samplePerson = Object.values(personIndex)[0];
+            const hasApps = samplePerson && samplePerson.weeks.some(w => w.apps && Object.keys(w.apps).length > 0);
+            if (!hasApps) {
+                renderNoApps(main, data, cfg);
+                return;
+            }
+
+            // ── Aggregate actions per app across whole window ──
+            const appTotals = {};
+            const appByCohort = { 'Power Users': {}, 'Habitual Users': {}, 'Novice Users': {}, 'Low Users': {} };
+            Object.values(personIndex).forEach(p => {
+                const lastWeek = p.weeks[p.weeks.length - 1];
+                const cohort = lastWeek ? lastWeek.threshold : 'Non Users';
+                p.weeks.forEach(w => {
+                    if (!w.apps) return;
+                    Object.entries(w.apps).forEach(([app, n]) => {
+                        appTotals[app] = (appTotals[app] || 0) + n;
+                        if (appByCohort[cohort]) {
+                            appByCohort[cohort][app] = (appByCohort[cohort][app] || 0) + n;
+                        }
+                    });
+                });
+            });
+
+            const totalAppActions = Object.values(appTotals).reduce((s, n) => s + n, 0);
+            const numWeeks = data.sortedDates.length;
+            const monthsInWindow = numWeeks / 4.33;
+            // Per-app monthly value with current global minutes-per-action
+            const appsRanked = Object.entries(appTotals).map(([app, total]) => {
+                const monthlyActions = total / monthsInWindow;
+                const monthlyValue = (monthlyActions * cfg.minutesPerAction / 60) * cfg.professionalRate;
+                return { app, total, monthlyActions, monthlyValue, share: total / Math.max(totalAppActions, 1) };
+            }).sort((a, b) => b.total - a.total);
+
+            const totalMonthlyValueAttributed = appsRanked.reduce((s, r) => s + r.monthlyValue, 0);
+
+            // ── Build cards ──
+            const kpis = `
+                <div class="kpi-row">
+                    <div class="kpi"><div class="label">Apps detected</div><div class="value">${appsRanked.length}</div><div class="sub">in your export</div></div>
+                    <div class="kpi"><div class="label">Top app</div><div class="value" style="font-size:1.25rem;">${escapeHtml(appsRanked[0].app)}</div><div class="sub">${InsightsShared.fmtPct(appsRanked[0].share * 100, 1)} of actions</div></div>
+                    <div class="kpi"><div class="label">Total attributed value</div><div class="value">${InsightsShared.fmtMoneyShort(totalMonthlyValueAttributed)}/mo</div><div class="sub">across all apps</div></div>
+                </div>`;
+
+            const appBarData = appsRanked.slice(0, 12).map(a => ({ label: a.app, value: a.monthlyValue }));
+            const attributionCard = `
+                <div class="insights-card">
+                    <h2>Monthly value attribution by app</h2>
+                    <p class="lede">Action volume per app &times; ${cfg.minutesPerAction} min &times; $${cfg.professionalRate}/hr. Reveals which surface is doing the heavy lifting and where to invest training next.</p>
+                    ${kpis}
+                    <div style="overflow-x:auto;">${InsightsShared.svgHBarChart(appBarData, { width: 800, color: '#00D4FF', padL: 200, valueFmt: v => InsightsShared.fmtMoneyShort(v) })}</div>
+                </div>`;
+
+            // ── Per-cohort behavioral profile ──
+            const cohortColors = InsightsShared.COHORT_COLORS;
+            const profileCards = ['Power Users', 'Habitual Users', 'Novice Users', 'Low Users'].map(cohort => {
+                const apps = appByCohort[cohort];
+                const totalC = Object.values(apps).reduce((s, n) => s + n, 0);
+                if (totalC === 0) {
+                    return `<div class="behavior-card" style="border-top-color:${cohortColors[cohort]};">
+                        <h3>${cohort}</h3>
+                        <p style="color:var(--text-secondary,#94A3B8);font-size:0.85rem;margin:0;">No app activity recorded for this cohort.</p>
+                    </div>`;
+                }
+                const top = Object.entries(apps)
+                    .map(([a, n]) => ({ app: a, n, pct: n / totalC * 100 }))
+                    .sort((a, b) => b.n - a.n)
+                    .slice(0, 6);
+                const max = top[0].pct;
+                return `<div class="behavior-card" style="border-top-color:${cohortColors[cohort]};">
+                    <h3>${cohort}</h3>
+                    ${top.map(t => `
+                        <div class="app-row">
+                            <div class="name" title="${escapeHtml(t.app)}">${escapeHtml(t.app.length > 18 ? t.app.slice(0, 17) + '…' : t.app)}</div>
+                            <div class="bar"><div class="bar-fill" style="background:${cohortColors[cohort]};width:${(t.pct / max * 100).toFixed(1)}%;"></div></div>
+                            <div class="pct">${t.pct.toFixed(0)}%</div>
+                        </div>
+                    `).join('')}
+                </div>`;
+            }).join('');
+
+            const profileCard = `
+                <div class="insights-card">
+                    <h2>Behavioral profile by cohort</h2>
+                    <p class="lede">What share of each cohort's actions happen in which app. Shows the behavioral signature you want Novices to grow into.</p>
+                    <div class="behavior-grid">${profileCards}</div>
+                </div>`;
+
+            // ── Meeting impact ──
+            let totalRecap = 0, totalAssistHrs = 0;
+            Object.values(personIndex).forEach(p => {
+                p.weeks.forEach(w => {
+                    totalRecap += w.ir || 0;
+                    totalAssistHrs += w.ah || 0;
+                });
+            });
+            const monthlyRecap = totalRecap / monthsInWindow;
+            const monthlyAssistHrs = totalAssistHrs / monthsInWindow;
+            // Heuristic: avg meeting reclaim per recap = 0.5 hrs
+            const recapHoursReclaimed = monthlyRecap * 0.5;
+            const recapValue = recapHoursReclaimed * cfg.professionalRate;
+            const assistValue = monthlyAssistHrs * cfg.professionalRate;
+            const meetingCard = `
+                <div class="insights-card">
+                    <h2>Meeting &amp; assist-hour impact</h2>
+                    <p class="lede">Intelligent recap and Copilot assist hours are measured directly by Viva. Modeled here at half an hour reclaimed per recap and full-rate for assist hours.</p>
+                    <div class="kpi-row">
+                        <div class="kpi"><div class="label">Intelligent Recap actions / mo</div><div class="value">${InsightsShared.fmtInt(monthlyRecap)}</div><div class="sub">across all users</div></div>
+                        <div class="kpi" style="border-left-color:#10b981;"><div class="label">Modeled meeting hours reclaimed</div><div class="value">${InsightsShared.fmtInt(recapHoursReclaimed)}</div><div class="sub">at 0.5 hr / recap</div></div>
+                        <div class="kpi" style="border-left-color:#10b981;"><div class="label">Recap value (monthly)</div><div class="value">${InsightsShared.fmtMoneyShort(recapValue)}</div><div class="sub">at $${cfg.professionalRate}/hr</div></div>
+                        <div class="kpi" style="border-left-color:#00D4FF;"><div class="label">Copilot assist hours / mo</div><div class="value">${InsightsShared.fmtInt(monthlyAssistHrs)}</div><div class="sub">measured directly</div></div>
+                        <div class="kpi" style="border-left-color:#00D4FF;"><div class="label">Assist-hour value</div><div class="value">${InsightsShared.fmtMoneyShort(assistValue)}/mo</div><div class="sub">straight-line</div></div>
+                    </div>
+                </div>`;
+
+            main.innerHTML = attributionCard + profileCard + meetingCard;
+        }
+
+        function renderNoApps(main, data, cfg) {
+            // Still show meeting impact even without per-app
+            let totalRecap = 0, totalAssistHrs = 0;
+            Object.values(data.personIndex).forEach(p => {
+                p.weeks.forEach(w => {
+                    totalRecap += w.ir || 0;
+                    totalAssistHrs += w.ah || 0;
+                });
+            });
+            const monthsInWindow = data.sortedDates.length / 4.33;
+            const monthlyRecap = totalRecap / monthsInWindow;
+            const monthlyAssistHrs = totalAssistHrs / monthsInWindow;
+            const recapHoursReclaimed = monthlyRecap * 0.5;
+            const recapValue = recapHoursReclaimed * cfg.professionalRate;
+            const assistValue = monthlyAssistHrs * cfg.professionalRate;
+
+            main.innerHTML = `
+                <div class="insights-card">
+                    <h2>Per-app attribution not available</h2>
+                    <p class="lede">Your Viva Insights export didn't include the per-app action columns (e.g. <em>Copilot actions taken in Word/Excel/Teams/Outlook</em>). Re-export with those columns selected to unlock app-level value attribution and the behavioral-profile view.</p>
+                    <p style="color:var(--text-secondary,#94A3B8);font-size:0.9rem;">In the meantime, the meeting &amp; assist-hour module below still works because those columns <em>are</em> present in your export.</p>
+                </div>
+                <div class="insights-card">
+                    <h2>Meeting &amp; assist-hour impact</h2>
+                    <p class="lede">Intelligent recap and Copilot assist hours are measured directly by Viva.</p>
+                    <div class="kpi-row">
+                        <div class="kpi"><div class="label">Intelligent Recap actions / mo</div><div class="value">${InsightsShared.fmtInt(monthlyRecap)}</div><div class="sub">across all users</div></div>
+                        <div class="kpi" style="border-left-color:#10b981;"><div class="label">Modeled meeting hours reclaimed</div><div class="value">${InsightsShared.fmtInt(recapHoursReclaimed)}</div><div class="sub">at 0.5 hr / recap</div></div>
+                        <div class="kpi" style="border-left-color:#10b981;"><div class="label">Recap value (monthly)</div><div class="value">${InsightsShared.fmtMoneyShort(recapValue)}</div><div class="sub">at $${cfg.professionalRate}/hr</div></div>
+                        <div class="kpi" style="border-left-color:#00D4FF;"><div class="label">Copilot assist hours / mo</div><div class="value">${InsightsShared.fmtInt(monthlyAssistHrs)}</div><div class="sub">measured directly</div></div>
+                        <div class="kpi" style="border-left-color:#00D4FF;"><div class="label">Assist-hour value</div><div class="value">${InsightsShared.fmtMoneyShort(assistValue)}/mo</div><div class="sub">straight-line</div></div>
+                    </div>
+                </div>`;
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Risk &amp; Waste — M365 Copilot ROI Calculator</title>
+    <link rel="stylesheet" href="styles.css?v=29">
+    <style>
+        .insights-card { background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
+        .insights-card h2 { color: var(--text-primary, #F1F5F9); margin: 0 0 0.5rem; font-size: 1.4rem; }
+        .insights-card .lede { color: var(--text-secondary, #94A3B8); margin: 0 0 1.5rem; }
+        .kpi-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .kpi { flex: 1 1 200px; background: var(--surface-raised, #253449); border-radius: 12px; padding: 1.25rem; border-left: 4px solid var(--copilot-cyan, #00D4FF); }
+        .kpi .label { font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+        .kpi .value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary, #F1F5F9); }
+        .kpi .sub { font-size: 0.8rem; color: var(--text-secondary, #94A3B8); margin-top: 0.25rem; }
+        .risk-table { width: 100%; border-collapse: collapse; }
+        .risk-table th { padding: 0.75rem 1rem; text-align: left; background: var(--surface-raised, #253449); color: var(--text-secondary, #94A3B8); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .risk-table td { padding: 0.85rem 1rem; color: var(--text-primary, #F1F5F9); font-size: 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .risk-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .pill { display: inline-block; padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; color: white; }
+        .waste-callout { background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(245,158,11,0.1)); border: 1px solid rgba(245,158,11,0.3); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
+        .filter { background: var(--surface-raised, #253449); border: 1px solid var(--border, rgba(255,255,255,0.08)); color: var(--text-primary, #F1F5F9); padding: 0.5rem 0.85rem; border-radius: 8px; font-size: 0.9rem; margin-left: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>Risk &amp; Waste</h1>
+                    <p class="subtitle">At-risk Power Users and underutilized licenses worth redeploying</p>
+                </div>
+            </div>
+        </header>
+        <nav class="nav-buttons" id="nav"></nav>
+        <main id="main"></main>
+        <footer>
+            <p>M365 Copilot Productivity ROI Calculator Suite | All data processed locally in your browser</p>
+        </footer>
+    </div>
+    <script src="insights-shared.js?v=1"></script>
+    <script>
+        document.getElementById('nav').outerHTML = InsightsShared.renderNav('at-risk.html');
+        (function init() {
+            const main = document.getElementById('main');
+            const data = InsightsShared.loadSharedData();
+            if (!data) { InsightsShared.renderEmptyState(main, 'Risk & Waste'); return; }
+            render(data, main);
+        })();
+
+        function render(data, main) {
+            const personIndex = data.personIndex;
+            const sortedDates = data.sortedDates;
+            const cfg = data.config;
+
+            // ── At-risk ──
+            const atRisk = InsightsShared.computeAtRisk(personIndex, sortedDates);
+            const atRiskFromPower = atRisk.filter(r => r.peakCohort === 'Power Users');
+            const atRiskFromHabit = atRisk.filter(r => r.peakCohort === 'Habitual Users');
+
+            // ── License waste ──
+            const cohorts = InsightsShared.computeCohorts(personIndex, sortedDates, cfg);
+            const nonUsers = cohorts.rows.find(r => r.name === 'Non Users') || { count: 0, monthlyValue: 0, investment: 0 };
+            const lowUsers = cohorts.rows.find(r => r.name === 'Low Users') || { count: 0, monthlyValue: 0, investment: 0 };
+            const wastedUsers = nonUsers.count + lowUsers.count;
+            const wastedSpend = nonUsers.investment + lowUsers.investment;
+            const wastedValuePct = (nonUsers.monthlyValue + lowUsers.monthlyValue) / Math.max(cohorts.totals.monthlyValue, 1) * 100;
+            const totalLicenseCost = cohorts.rows.reduce((s, r) => s + r.investment, 0);
+            const annualWaste = wastedSpend * 12;
+
+            // ── Render ──
+            const wasteCard = `
+                <div class="waste-callout">
+                    <h2 style="margin:0 0 0.5rem;color:#F1F5F9;font-size:1.4rem;">License waste opportunity</h2>
+                    <p style="color:#94A3B8;margin:0 0 1.5rem;">${wastedUsers} licenses sitting at <strong>Non</strong> or <strong>Low</strong> usage. Each one is paying full price for less than ${wastedValuePct < 1 ? wastedValuePct.toFixed(2) : wastedValuePct.toFixed(1)}% of total value generated.</p>
+                    <div class="kpi-row">
+                        <div class="kpi" style="border-left-color:#ef4444;">
+                            <div class="label">Wasted licenses</div>
+                            <div class="value">${InsightsShared.fmtInt(wastedUsers)}</div>
+                            <div class="sub">${InsightsShared.fmtPct(wastedUsers / Math.max(cohorts.totals.count, 1) * 100, 1)} of base</div>
+                        </div>
+                        <div class="kpi" style="border-left-color:#ef4444;">
+                            <div class="label">Monthly spend at risk</div>
+                            <div class="value">${InsightsShared.fmtMoney(wastedSpend)}</div>
+                            <div class="sub">at $${cfg.licenseCost}/user/month</div>
+                        </div>
+                        <div class="kpi" style="border-left-color:#ef4444;">
+                            <div class="label">Annual waste exposure</div>
+                            <div class="value">${InsightsShared.fmtMoneyShort(annualWaste)}</div>
+                            <div class="sub">if not redeployed</div>
+                        </div>
+                        <div class="kpi" style="border-left-color:#10b981;">
+                            <div class="label">Value contribution</div>
+                            <div class="value">&lt; ${wastedValuePct.toFixed(1)}%</div>
+                            <div class="sub">of total monthly value</div>
+                        </div>
+                    </div>
+                    <p style="color:#F1F5F9;font-size:0.9rem;margin:1rem 0 0;padding:0.75rem 1rem;background:rgba(255,255,255,0.05);border-radius:8px;">
+                        <strong>Recommendation:</strong> reassign these ${wastedUsers} licenses to a pilot group of high-need users from your unlicensed pool, or pause them at next renewal. Either move recovers ${InsightsShared.fmtMoneyShort(annualWaste)} of annual exposure with negligible value loss.
+                    </p>
+                </div>`;
+
+            const atRiskKpis = `
+                <div class="kpi-row">
+                    <div class="kpi" style="border-left-color:#ef4444;">
+                        <div class="label">At-risk users</div>
+                        <div class="value">${InsightsShared.fmtInt(atRisk.length)}</div>
+                        <div class="sub">were Power/Habitual, now lower</div>
+                    </div>
+                    <div class="kpi" style="border-left-color:#ef4444;">
+                        <div class="label">Power Users at risk</div>
+                        <div class="value">${InsightsShared.fmtInt(atRiskFromPower.length)}</div>
+                        <div class="sub">peak engagement slipped</div>
+                    </div>
+                    <div class="kpi" style="border-left-color:#f59e0b;">
+                        <div class="label">Habitual Users at risk</div>
+                        <div class="value">${InsightsShared.fmtInt(atRiskFromHabit.length)}</div>
+                        <div class="sub">losing the habit</div>
+                    </div>
+                </div>`;
+
+            const orgs = [...new Set(atRisk.map(r => r.org))].sort();
+            const filterUI = `
+                <div style="margin-bottom:1rem;color:var(--text-secondary,#94A3B8);font-size:0.9rem;">
+                    Filter by org:
+                    <select class="filter" id="orgFilter">
+                        <option value="">All organizations</option>
+                        ${orgs.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}
+                    </select>
+                    Filter by peak cohort:
+                    <select class="filter" id="peakFilter">
+                        <option value="">All</option>
+                        <option value="Power Users">Power Users</option>
+                        <option value="Habitual Users">Habitual Users</option>
+                    </select>
+                </div>`;
+
+            const tableHtml = `
+                <div style="overflow-x:auto;">
+                    <table class="risk-table">
+                        <thead>
+                            <tr>
+                                <th>PersonId</th>
+                                <th>Organization</th>
+                                <th>Peak cohort (last 12w)</th>
+                                <th>Current cohort</th>
+                                <th class="num">Drop (tiers)</th>
+                                <th class="num">Recent actions (4w)</th>
+                                <th class="num">Trailing-12w avg</th>
+                            </tr>
+                        </thead>
+                        <tbody id="atRiskBody"></tbody>
+                    </table>
+                </div>`;
+
+            main.innerHTML = wasteCard + `
+                <div class="insights-card">
+                    <h2>At-risk Power &amp; Habitual users</h2>
+                    <p class="lede">Users whose peak cohort in the prior 8 weeks was Power or Habitual but who have now slipped down. Highest drop first — these are your CSM follow-up list.</p>
+                    ${atRiskKpis}
+                    ${filterUI}
+                    ${tableHtml}
+                </div>`;
+
+            window._atRisk = atRisk;
+            renderAtRiskTable();
+            document.getElementById('orgFilter').addEventListener('change', renderAtRiskTable);
+            document.getElementById('peakFilter').addEventListener('change', renderAtRiskTable);
+        }
+
+        function renderAtRiskTable() {
+            const orgFilter = document.getElementById('orgFilter').value;
+            const peakFilter = document.getElementById('peakFilter').value;
+            const filtered = window._atRisk.filter(r =>
+                (!orgFilter || r.org === orgFilter) &&
+                (!peakFilter || r.peakCohort === peakFilter)
+            );
+            const tbody = document.getElementById('atRiskBody');
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#94A3B8;padding:2rem;">No at-risk users match this filter</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = filtered.slice(0, 500).map(r => {
+                const peakColor = InsightsShared.COHORT_COLORS[r.peakCohort] || '#94A3B8';
+                const currColor = InsightsShared.COHORT_COLORS[r.currentCohort] || '#94A3B8';
+                return `<tr>
+                    <td><code style="font-size:0.8rem;color:#94A3B8;">${escapeHtml(r.personId.slice(0, 12))}</code></td>
+                    <td>${escapeHtml(r.org)}</td>
+                    <td><span class="pill" style="background:${peakColor};">${r.peakCohort}</span></td>
+                    <td><span class="pill" style="background:${currColor};">${r.currentCohort}</span></td>
+                    <td class="num" style="color:#ef4444;font-weight:600;">&darr; ${r.drop}</td>
+                    <td class="num">${InsightsShared.fmtInt(r.recentActions)}</td>
+                    <td class="num">${r.avg12.toFixed(1)}</td>
+                </tr>`;
+            }).join('') + (filtered.length > 500 ? `<tr><td colspan="7" style="text-align:center;color:#94A3B8;padding:1rem;">Showing top 500 of ${filtered.length}</td></tr>` : '');
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+        }
+    </script>
+</body>
+</html>

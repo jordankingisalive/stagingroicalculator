@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forecast &amp; Sensitivity — M365 Copilot ROI Calculator</title>
+    <link rel="stylesheet" href="styles.css?v=29">
+    <style>
+        .insights-card { background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
+        .insights-card h2 { color: var(--text-primary, #F1F5F9); margin: 0 0 0.5rem; font-size: 1.4rem; }
+        .insights-card .lede { color: var(--text-secondary, #94A3B8); margin: 0 0 1.5rem; }
+        .kpi-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .kpi { flex: 1 1 180px; background: var(--surface-raised, #253449); border-radius: 12px; padding: 1.25rem; border-left: 4px solid var(--copilot-cyan, #00D4FF); }
+        .kpi .label { font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+        .kpi .value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary, #F1F5F9); }
+        .kpi .sub { font-size: 0.8rem; color: var(--text-secondary, #94A3B8); margin-top: 0.25rem; }
+        .slider-control { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+        .slider-control label { color: var(--text-primary, #F1F5F9); min-width: 200px; }
+        .slider-control input[type=range] { flex: 1; min-width: 200px; max-width: 360px; accent-color: var(--copilot-cyan, #00D4FF); }
+        .slider-control .val { font-weight: 700; color: var(--copilot-cyan, #00D4FF); min-width: 60px; text-align: right; font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>Forecast &amp; Sensitivity</h1>
+                    <p class="subtitle">Project where adoption is heading, test alternate valuation models, and find which assumption matters most</p>
+                </div>
+            </div>
+        </header>
+        <nav class="nav-buttons" id="nav"></nav>
+        <main id="main"></main>
+        <footer>
+            <p>M365 Copilot Productivity ROI Calculator Suite | All data processed locally in your browser</p>
+        </footer>
+    </div>
+    <script src="insights-shared.js?v=1"></script>
+    <script>
+        document.getElementById('nav').outerHTML = InsightsShared.renderNav('forecast.html');
+        (function init() {
+            const main = document.getElementById('main');
+            const data = InsightsShared.loadSharedData();
+            if (!data) { InsightsShared.renderEmptyState(main, 'Forecast & Sensitivity'); return; }
+            render(data, main);
+        })();
+
+        function render(data, main) {
+            const personIndex = data.personIndex;
+            const sortedDates = data.sortedDates;
+            const cfg = data.config;
+
+            // ── Cohort trajectory (real) → linear regression on % Habitual+Power ──
+            const trajectory = InsightsShared.computeCohortTrajectory(personIndex, sortedDates);
+            const total = Object.keys(personIndex).length;
+            const series = trajectory.map((t, i) => {
+                const hp = (t.counts['Power Users'] || 0) + (t.counts['Habitual Users'] || 0);
+                return { x: i, week: t.week, pct: hp / Math.max(total, 1) * 100, count: hp };
+            });
+
+            // Simple linear regression on the last min(8, available) weeks
+            const fitN = Math.min(series.length, 8);
+            const fitSeries = series.slice(-fitN);
+            const fit = linearRegression(fitSeries.map(s => s.x), fitSeries.map(s => s.pct));
+
+            // Project 13 weeks forward
+            const projectN = 13;
+            const projection = [];
+            for (let i = 1; i <= projectN; i++) {
+                const x = series[series.length - 1].x + i;
+                const projPct = Math.max(0, Math.min(100, fit.m * x + fit.b));
+                const projCount = Math.round(projPct / 100 * total);
+                const weekDate = new Date(sortedDates[sortedDates.length - 1]);
+                weekDate.setDate(weekDate.getDate() + i * 7);
+                projection.push({
+                    week: weekDate.toISOString().slice(0, 10),
+                    pct: projPct,
+                    count: projCount
+                });
+            }
+            const currentPct = series[series.length - 1].pct;
+            const projectedPct = projection[projection.length - 1].pct;
+            const slopePerWeek = fit.m;
+
+            // Build combined chart
+            const chartW = 880, chartH = 280, padL = 56, padR = 24, padT = 16, padB = 44;
+            const innerW = chartW - padL - padR, innerH = chartH - padT - padB;
+            const combined = series.concat(projection.map(p => ({ pct: p.pct, week: p.week, projected: true })));
+            const maxY = Math.max(100, ...combined.map(c => c.pct));
+            const xAt = i => padL + (i / (combined.length - 1)) * innerW;
+            const yAt = v => padT + innerH - (v / maxY) * innerH;
+            const histPts = series.map((s, i) => `${xAt(i).toFixed(1)},${yAt(s.pct).toFixed(1)}`).join(' ');
+            const projPts = projection.map((p, i) => `${xAt(series.length + i).toFixed(1)},${yAt(p.pct).toFixed(1)}`).join(' ');
+            const connectPts = `${xAt(series.length - 1).toFixed(1)},${yAt(series[series.length - 1].pct).toFixed(1)} ${xAt(series.length).toFixed(1)},${yAt(projection[0].pct).toFixed(1)}`;
+            const yTicks = [0, 25, 50, 75, 100].filter(v => v <= maxY).map(v =>
+                `<text x="${padL - 8}" y="${yAt(v).toFixed(1) + 4}" fill="#94A3B8" font-size="11" text-anchor="end">${v}%</text>
+                 <line x1="${padL}" x2="${chartW - padR}" y1="${yAt(v).toFixed(1)}" y2="${yAt(v).toFixed(1)}" stroke="rgba(255,255,255,0.06)"/>`
+            ).join('');
+            const xTickIdx = [0, series.length - 1, combined.length - 1];
+            const xLabels = xTickIdx.map(i => `<text x="${xAt(i).toFixed(1)}" y="${chartH - padB + 18}" fill="#94A3B8" font-size="11" text-anchor="middle">${combined[i].week}</text>`).join('');
+            const divider = `<line x1="${xAt(series.length - 1).toFixed(1)}" x2="${xAt(series.length - 1).toFixed(1)}" y1="${padT}" y2="${chartH - padB}" stroke="rgba(245,158,11,0.4)" stroke-dasharray="4,4"/>
+                             <text x="${xAt(series.length - 1).toFixed(1)}" y="${padT + 12}" fill="#f59e0b" font-size="11" text-anchor="middle">today</text>`;
+            const forecastSvg = `<svg width="${chartW}" height="${chartH}" viewBox="0 0 ${chartW} ${chartH}" style="max-width:100%;height:auto;">
+                ${yTicks}
+                <polyline points="${histPts}" fill="none" stroke="#00D4FF" stroke-width="2.5"/>
+                <polyline points="${connectPts}" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="3,3" opacity="0.7"/>
+                <polyline points="${projPts}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-dasharray="6,4"/>
+                ${divider}
+                ${xLabels}
+            </svg>
+            <div style="display:flex;gap:1.5rem;margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary,#94A3B8);">
+                <span><span style="display:inline-block;width:14px;height:3px;background:#00D4FF;vertical-align:middle;margin-right:6px;"></span>Actual</span>
+                <span><span style="display:inline-block;width:14px;height:3px;background:#10b981;vertical-align:middle;margin-right:6px;"></span>Projected (next ${projectN}w)</span>
+            </div>`;
+
+            const forecastCard = `
+                <div class="insights-card">
+                    <h2>Forecast: % Habitual + Power Users</h2>
+                    <p class="lede">Linear extrapolation of the last ${fitN} weeks of real cohort migration, projected ${projectN} weeks out. Slope ${slopePerWeek >= 0 ? '+' : ''}${slopePerWeek.toFixed(2)}pp / week.</p>
+                    <div class="kpi-row">
+                        <div class="kpi"><div class="label">Today</div><div class="value">${currentPct.toFixed(1)}%</div><div class="sub">${InsightsShared.fmtInt(series[series.length - 1].count)} users</div></div>
+                        <div class="kpi" style="border-left-color:#10b981;"><div class="label">In ${projectN} weeks</div><div class="value">${projectedPct.toFixed(1)}%</div><div class="sub">${InsightsShared.fmtInt(projection[projection.length - 1].count)} users</div></div>
+                        <div class="kpi" style="border-left-color:${slopePerWeek > 0 ? '#10b981' : '#ef4444'};"><div class="label">Trajectory</div><div class="value">${slopePerWeek >= 0 ? '+' : ''}${slopePerWeek.toFixed(2)}pp/w</div><div class="sub">${slopePerWeek > 0.5 ? 'strong growth' : slopePerWeek > 0 ? 'mild growth' : slopePerWeek > -0.5 ? 'flat' : 'declining'}</div></div>
+                    </div>
+                    <div style="overflow-x:auto;">${forecastSvg}</div>
+                </div>`;
+
+            // ── Adjusted CAH valuation ──
+            let totalAssistHrs = 0, totalRecap = 0;
+            Object.values(personIndex).forEach(p => {
+                p.weeks.forEach(w => {
+                    totalAssistHrs += w.ah || 0;
+                    totalRecap += w.ir || 0;
+                });
+            });
+            const monthsInWindow = sortedDates.length / 4.33;
+            const monthlyAssistHrs = totalAssistHrs / monthsInWindow;
+            const monthlyRecap = totalRecap / monthsInWindow;
+
+            const cohorts = InsightsShared.computeCohorts(personIndex, sortedDates, cfg);
+            const baselineMonthlyValue = cohorts.totals.monthlyValue;
+            const baselineRoi = cohorts.totals.roi;
+
+            window._cahCtx = { monthlyAssistHrs, monthlyRecap, cfg, cohorts, baselineMonthlyValue, baselineRoi };
+
+            const cahCard = `
+                <div class="insights-card">
+                    <h2>Adjusted Copilot Assisted Hours valuation</h2>
+                    <p class="lede">Alternate ROI model. Instead of <code>actions &times; minutes</code>, value is computed from <strong>Copilot assisted hours</strong> measured directly by Viva, plus half of Intelligent Recap actions counted as reclaimed meeting hours, then dampened by a <strong>penalty factor</strong> to account for partial attribution.</p>
+                    <div class="slider-control">
+                        <label for="penalty">Penalty factor (1.0 = full credit)</label>
+                        <input type="range" id="penalty" min="0.25" max="1.0" step="0.05" value="1.0">
+                        <span class="val" id="penaltyVal">1.00</span>
+                    </div>
+                    <div id="cahKpis"></div>
+                </div>`;
+
+            // ── Sensitivity tornado ──
+            const tornadoCard = `
+                <div class="insights-card">
+                    <h2>Sensitivity tornado</h2>
+                    <p class="lede">How much does monthly value swing if each assumption changes &plusmn;25% from your current settings? The longer the bar, the more that variable matters.</p>
+                    <div id="tornadoChart"></div>
+                </div>`;
+
+            main.innerHTML = forecastCard + cahCard + tornadoCard;
+
+            // ── Wire CAH slider ──
+            const renderCah = () => {
+                const penalty = parseFloat(document.getElementById('penalty').value);
+                document.getElementById('penaltyVal').textContent = penalty.toFixed(2);
+                const recapHours = window._cahCtx.monthlyRecap * 0.5;
+                const adjustedMonthlyValue = (window._cahCtx.monthlyAssistHrs + recapHours) * penalty * cfg.professionalRate;
+                const investment = cohorts.totals.investment;
+                const adjustedRoi = investment > 0 ? adjustedMonthlyValue / investment : 0;
+                const diff = adjustedMonthlyValue - baselineMonthlyValue;
+                const diffPct = baselineMonthlyValue > 0 ? (diff / baselineMonthlyValue * 100) : 0;
+                document.getElementById('cahKpis').innerHTML = `
+                    <div class="kpi-row">
+                        <div class="kpi"><div class="label">Baseline (actions &times; min)</div><div class="value">${InsightsShared.fmtMoneyShort(baselineMonthlyValue)}</div><div class="sub">${baselineRoi.toFixed(1)}x ROI</div></div>
+                        <div class="kpi" style="border-left-color:#10b981;"><div class="label">Adjusted CAH at ${penalty.toFixed(2)}&times;</div><div class="value">${InsightsShared.fmtMoneyShort(adjustedMonthlyValue)}</div><div class="sub">${adjustedRoi.toFixed(1)}x ROI</div></div>
+                        <div class="kpi" style="border-left-color:${diff >= 0 ? '#10b981' : '#ef4444'};"><div class="label">Variance</div><div class="value">${diff >= 0 ? '+' : ''}${InsightsShared.fmtMoneyShort(Math.abs(diff))}</div><div class="sub">${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}% vs baseline</div></div>
+                    </div>`;
+            };
+            document.getElementById('penalty').addEventListener('input', renderCah);
+            renderCah();
+
+            // ── Sensitivity tornado calculation ──
+            const vars = [
+                { key: 'minutesPerAction', label: 'Minutes saved per action', delta: 0.25 },
+                { key: 'professionalRate', label: 'Hourly rate', delta: 0.25 },
+                { key: 'licenseCost',      label: 'License cost / user', delta: 0.25 }
+            ];
+            const swings = vars.map(v => {
+                const cfgUp = { ...cfg, [v.key]: cfg[v.key] * (1 + v.delta) };
+                const cfgDn = { ...cfg, [v.key]: cfg[v.key] * (1 - v.delta) };
+                const up = InsightsShared.computeCohorts(personIndex, sortedDates, cfgUp).totals.monthlyValue;
+                const dn = InsightsShared.computeCohorts(personIndex, sortedDates, cfgDn).totals.monthlyValue;
+                return {
+                    label: v.label,
+                    current: cfg[v.key],
+                    up: up - baselineMonthlyValue,
+                    dn: dn - baselineMonthlyValue
+                };
+            }).sort((a, b) => (Math.abs(b.up) + Math.abs(b.dn)) - (Math.abs(a.up) + Math.abs(a.dn)));
+
+            // Render tornado as horizontal SVG
+            const tW = 760, rowH = 60, padLT = 220, padRT = 80;
+            const tH = swings.length * rowH + 40;
+            const innerWT = tW - padLT - padRT;
+            const maxSwing = Math.max(...swings.flatMap(s => [Math.abs(s.up), Math.abs(s.dn)]), 1);
+            const centerX = padLT + innerWT / 2;
+            const scale = (innerWT / 2) / maxSwing;
+            const tornadoRows = swings.map((s, i) => {
+                const y = 20 + i * rowH;
+                const dnW = Math.abs(s.dn) * scale;
+                const upW = Math.abs(s.up) * scale;
+                return `
+                    <text x="${padLT - 10}" y="${y + rowH * 0.5}" fill="#F1F5F9" font-size="13" text-anchor="end">${s.label}</text>
+                    <rect x="${centerX - dnW}" y="${y + rowH * 0.2}" width="${dnW.toFixed(1)}" height="${rowH * 0.6}" fill="#ef4444" opacity="0.85"/>
+                    <rect x="${centerX}" y="${y + rowH * 0.2}" width="${upW.toFixed(1)}" height="${rowH * 0.6}" fill="#10b981" opacity="0.85"/>
+                    <text x="${centerX - dnW - 4}" y="${y + rowH * 0.55}" fill="#ef4444" font-size="11" text-anchor="end">${InsightsShared.fmtMoneyShort(s.dn)}</text>
+                    <text x="${centerX + upW + 4}" y="${y + rowH * 0.55}" fill="#10b981" font-size="11">+${InsightsShared.fmtMoneyShort(s.up)}</text>
+                `;
+            }).join('');
+            const axisLine = `<line x1="${centerX}" x2="${centerX}" y1="10" y2="${tH - 10}" stroke="#94A3B8" stroke-dasharray="3,3"/>
+                              <text x="${centerX}" y="${tH - 4}" fill="#94A3B8" font-size="11" text-anchor="middle">baseline ${InsightsShared.fmtMoneyShort(baselineMonthlyValue)}/mo</text>`;
+            document.getElementById('tornadoChart').innerHTML = `
+                <div style="overflow-x:auto;">
+                    <svg width="${tW}" height="${tH}" viewBox="0 0 ${tW} ${tH}" style="max-width:100%;height:auto;">
+                        ${axisLine}
+                        ${tornadoRows}
+                    </svg>
+                </div>`;
+        }
+
+        function linearRegression(xs, ys) {
+            const n = xs.length;
+            const xMean = xs.reduce((s, v) => s + v, 0) / n;
+            const yMean = ys.reduce((s, v) => s + v, 0) / n;
+            let num = 0, den = 0;
+            for (let i = 0; i < n; i++) {
+                num += (xs[i] - xMean) * (ys[i] - yMean);
+                den += (xs[i] - xMean) ** 2;
+            }
+            const m = den === 0 ? 0 : num / den;
+            const b = yMean - m * xMean;
+            return { m, b };
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adoption Insights — M365 Copilot ROI Calculator</title>
+    <link rel="stylesheet" href="styles.css?v=29">
+    <style>
+        .insights-card { background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
+        .insights-card h2 { color: var(--text-primary, #F1F5F9); margin: 0 0 0.5rem; font-size: 1.4rem; }
+        .insights-card .lede { color: var(--text-secondary, #94A3B8); margin: 0 0 1.5rem; }
+        .kpi-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+        .kpi { flex: 1 1 180px; background: var(--surface-raised, #253449); border-radius: 12px; padding: 1.25rem; border-left: 4px solid var(--copilot-cyan, #00D4FF); }
+        .kpi .label { font-size: 0.8rem; color: var(--text-secondary, #94A3B8); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+        .kpi .value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary, #F1F5F9); }
+        .kpi .sub { font-size: 0.8rem; color: var(--text-secondary, #94A3B8); margin-top: 0.25rem; }
+        .migration-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .migration-table th, .migration-table td { padding: 0.5rem 0.75rem; text-align: center; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.05); }
+        .migration-table th { background: var(--surface-raised, #253449); color: var(--text-secondary, #94A3B8); font-weight: 600; }
+        .migration-table td.row-label { text-align: left; font-weight: 600; color: var(--text-primary, #F1F5F9); background: var(--surface-raised, #253449); }
+        .migration-table td.diagonal { background: rgba(255,255,255,0.04); }
+        .migration-table td.up { color: #10b981; font-weight: 600; }
+        .migration-table td.down { color: #ef4444; font-weight: 600; }
+        .chart-wrapper { overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>Adoption Insights</h1>
+                    <p class="subtitle">Cohort trajectory, weekly migration, and time-to-habit from your Viva Insights export</p>
+                </div>
+            </div>
+        </header>
+        <nav class="nav-buttons" id="nav"></nav>
+        <main id="main"></main>
+        <footer>
+            <p>M365 Copilot Productivity ROI Calculator Suite | All data processed locally in your browser</p>
+        </footer>
+    </div>
+    <script src="insights-shared.js?v=1"></script>
+    <script>
+        document.getElementById('nav').outerHTML = InsightsShared.renderNav('insights.html');
+        (function init() {
+            const main = document.getElementById('main');
+            const data = InsightsShared.loadSharedData();
+            if (!data) { InsightsShared.renderEmptyState(main, 'Adoption Insights'); return; }
+            render(data, main);
+        })();
+
+        function render(data, main) {
+            const personIndex = data.personIndex;
+            const sortedDates = data.sortedDates;
+            const cfg = data.config;
+            const cohorts = InsightsShared.computeCohorts(personIndex, sortedDates, cfg);
+            const totalUsers = cohorts.totals.count;
+            const habitualOrBetter = cohorts.rows
+                .filter(r => r.name === 'Power Users' || r.name === 'Habitual Users')
+                .reduce((s, r) => s + r.count, 0);
+
+            // ── KPI row ──
+            const kpis = `
+                <div class="kpi-row">
+                    <div class="kpi"><div class="label">Total Licensed Users</div><div class="value">${InsightsShared.fmtInt(totalUsers)}</div><div class="sub">across ${data.sortedDates.length} weeks</div></div>
+                    <div class="kpi"><div class="label">Power + Habitual</div><div class="value">${InsightsShared.fmtInt(habitualOrBetter)}</div><div class="sub">${InsightsShared.fmtPct(habitualOrBetter / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
+                    <div class="kpi"><div class="label">Monthly Value</div><div class="value">${InsightsShared.fmtMoneyShort(cohorts.totals.monthlyValue)}</div><div class="sub">${cohorts.totals.roi.toFixed(1)}x ROI</div></div>
+                    <div class="kpi"><div class="label">Window</div><div class="value">${data.sortedDates.length}w</div><div class="sub">${data.dateRange}</div></div>
+                </div>`;
+
+            // ── Trajectory ──
+            const trajectory = InsightsShared.computeCohortTrajectory(personIndex, sortedDates);
+            const trajectorySvg = InsightsShared.svgStackedArea(trajectory, { width: 880, height: 320 });
+            const trajectoryCard = `
+                <div class="insights-card">
+                    <h2>Cohort trajectory</h2>
+                    <p class="lede">Per-user threshold reclassified at each week's trailing 12-week window. Shows whether your base is shifting up the engagement ladder or stalling.</p>
+                    <div class="chart-wrapper">${trajectorySvg}</div>
+                </div>`;
+
+            // ── Migration matrix (last 4w vs prior 4w) ──
+            const migration = InsightsShared.computeMigration(personIndex, sortedDates, 4);
+            let migrationCard = '';
+            if (migration) {
+                const m = migration.matrix;
+                const cohortOrder = InsightsShared.COHORT_ORDER;
+                let rowsHtml = '';
+                let upTotal = 0, downTotal = 0, sameTotal = 0;
+                cohortOrder.forEach((from, fi) => {
+                    let cells = `<td class="row-label">${from}</td>`;
+                    cohortOrder.forEach((to, ti) => {
+                        const v = m[from][to];
+                        let cls = '';
+                        if (fi === ti) cls = 'diagonal';
+                        else if (ti < fi) cls = 'up';
+                        else cls = 'down';
+                        if (fi === ti) sameTotal += v;
+                        else if (ti < fi) upTotal += v;
+                        else downTotal += v;
+                        cells += `<td class="${cls}">${v || ''}</td>`;
+                    });
+                    rowsHtml += `<tr>${cells}</tr>`;
+                });
+                migrationCard = `
+                    <div class="insights-card">
+                        <h2>Cohort migration (last 4 weeks vs prior 4 weeks)</h2>
+                        <p class="lede">Rows = where each user was at <strong>${migration.priorLabel}</strong>. Columns = where they are at <strong>${migration.recentLabel}</strong>. Green = moved up, red = moved down, neutral = stayed.</p>
+                        <div class="kpi-row">
+                            <div class="kpi" style="border-left-color:#10b981;"><div class="label">Moved Up</div><div class="value">${InsightsShared.fmtInt(upTotal)}</div><div class="sub">${InsightsShared.fmtPct(upTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
+                            <div class="kpi" style="border-left-color:#94A3B8;"><div class="label">Stayed</div><div class="value">${InsightsShared.fmtInt(sameTotal)}</div><div class="sub">${InsightsShared.fmtPct(sameTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
+                            <div class="kpi" style="border-left-color:#ef4444;"><div class="label">Moved Down</div><div class="value">${InsightsShared.fmtInt(downTotal)}</div><div class="sub">${InsightsShared.fmtPct(downTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table class="migration-table">
+                                <thead>
+                                    <tr><th>From &darr; / To &rarr;</th>${cohortOrder.map(c => `<th>${c}</th>`).join('')}</tr>
+                                </thead>
+                                <tbody>${rowsHtml}</tbody>
+                            </table>
+                        </div>
+                    </div>`;
+            }
+
+            // ── Time-to-habit ──
+            const tth = InsightsShared.computeTimeToHabit(personIndex);
+            let tthCard = '';
+            if (tth.count > 0) {
+                const histData = tth.histogram.map((v, i) => ({
+                    label: (i === tth.histogram.length - 1 ? `${i}+w` : `${i}w`),
+                    value: v
+                }));
+                tthCard = `
+                    <div class="insights-card">
+                        <h2>Time to habit</h2>
+                        <p class="lede">For each user who reached Power or Habitual status, weeks elapsed between their first non-zero action week and their first habit week. This is the #1 metric for whether onboarding is working.</p>
+                        <div class="kpi-row">
+                            <div class="kpi"><div class="label">Users Who Reached Habit</div><div class="value">${InsightsShared.fmtInt(tth.count)}</div><div class="sub">${InsightsShared.fmtPct(tth.count / Math.max(totalUsers,1) * 100, 1)} of total</div></div>
+                            <div class="kpi"><div class="label">Median Weeks</div><div class="value">${tth.median}</div><div class="sub">half got there faster</div></div>
+                            <div class="kpi"><div class="label">Mean Weeks</div><div class="value">${tth.mean.toFixed(1)}</div><div class="sub">average</div></div>
+                        </div>
+                        <div class="chart-wrapper">${InsightsShared.svgBarChart(histData, { width: 880, height: 260, color: '#00D4FF' })}</div>
+                    </div>`;
+            } else {
+                tthCard = `
+                    <div class="insights-card">
+                        <h2>Time to habit</h2>
+                        <p class="lede">No users in this dataset have a clearly-bounded first-action &rarr; first-habit transition (need at least 12 weeks of pre-habit history). This view will populate as more weeks accumulate.</p>
+                    </div>`;
+            }
+
+            main.innerHTML = kpis + trajectoryCard + migrationCard + tthCard;
+        }
+    </script>
+</body>
+</html>

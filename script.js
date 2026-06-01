@@ -164,6 +164,7 @@ function handleFile(file) {
             uploadedData = parseCSV(csvData);
             config.analysisWeeks = uploadedData.detectedWeeks || 26;
             isDemoData = false; // Mark as customer upload
+            if (window.InsightsShared) window.InsightsShared.saveSharedData(uploadedData, config);
             showFilePreview(file.name, uploadedData);
         } catch (error) {
             showError('Error processing file: ' + error.message);
@@ -188,6 +189,7 @@ function loadDemoReportInstant(csvText) {
         uploadedData = parseCSV(csvText);
         config.analysisWeeks = uploadedData.detectedWeeks || 26;
         isDemoData = true;
+        if (window.InsightsShared) window.InsightsShared.saveSharedData(uploadedData, config);
 
         if (window.clarity) {
             try { clarity('event', 'demo_report_loaded_instant'); } catch (e) {}
@@ -241,6 +243,7 @@ async function loadDemoReport() {
         uploadedData = parseCSV(csvData);
         config.analysisWeeks = uploadedData.detectedWeeks || 26;
         isDemoData = true; // Mark as demo data
+        if (window.InsightsShared) window.InsightsShared.saveSharedData(uploadedData, config);
 
         // Run full calculation automatically
         await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause for effect
@@ -444,8 +447,25 @@ function parseVivaInsights(lines, headers) {
     const iOrg         = col('Organization');
     const iFunction    = col('FunctionType');
 
+    // ---- Per-app columns (e.g. "Copilot actions taken in Word", "Chat actions taken in Teams") ----
+    // We detect any column whose lowercase name matches /actions? taken in (\w[\w &]*)/ and capture
+    // the app label after "in". Used for the per-app attribution + behavioral profile pages.
+    const appColumns = [];
+    headers.forEach((h, idx) => {
+        const lo = h.trim().toLowerCase();
+        const m = lo.match(/^(?:copilot|chat|summari[sz]e|create|edit|draft|rewrite)?\s*(?:actions?|messages?|drafts?|summari[sz]ations?)\s+taken\s+in\s+(.+)$/i);
+        if (m) {
+            const app = m[1].replace(/\s+/g, ' ').trim();
+            // Skip if it's just rolling up to "total" or another umbrella
+            if (!/^total\b/i.test(app)) {
+                appColumns.push({ idx, app: app.replace(/\b\w/g, c => c.toUpperCase()) });
+            }
+        }
+    });
+    const hasAppData = appColumns.length > 0;
+
     // ---- First pass: build slim per-person weekly index, raw org rollup, date set ----
-    // personIndex[personId] = { org, fn, weeks: [{d, a, ad, ed, ah, ir}, ...] }
+    // personIndex[personId] = { org, fn, weeks: [{d, a, ad, ed, ah, ir, apps?}, ...] }
     const personIndex = {};
     const dateSet = new Set();
 
@@ -482,7 +502,15 @@ function parseVivaInsights(lines, headers) {
             ad: activeDays,
             ed: enabledDays,
             ah: assistHrs,
-            ir: intelRecap
+            ir: intelRecap,
+            apps: hasAppData ? (() => {
+                const map = {};
+                for (const { idx, app } of appColumns) {
+                    const n = parseNumber(v[idx]);
+                    if (n) map[app] = (map[app] || 0) + n;
+                }
+                return map;
+            })() : null
         });
         dateSet.add(dateStr);
     }
@@ -676,7 +704,9 @@ function parseVivaInsights(lines, headers) {
         sortedDates,
         personIndex,
         personCohorts,
-        isVivaInsights: true
+        isVivaInsights: true,
+        hasAppData,
+        appColumns: appColumns.map(c => c.app)
     };
 }
 

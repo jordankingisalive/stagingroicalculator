@@ -10,17 +10,18 @@
         .demo-banner{background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:.75rem 1.5rem;text-align:center;font-size:.95rem;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.15)}
         .demo-banner a{color:#fff;text-decoration:underline;margin-left:.5rem}
         .demo-loading{min-height:80vh;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#F1F5F9}
-        #demoNavWrap{max-width:1280px;margin:1.25rem auto 0;padding:0 1.5rem}
-        #demoNavWrap .nav-buttons{margin:0}
+        /* The tile-grid nav replaces the old 4-tab strip after the report renders. */
+        .report-tabs{display:none !important}
+        .report-tab-content{display:block !important;animation:none !important}
+        #demoTileNav{margin:1.5rem 0 0}
+        #demoTileNav .nav-buttons{margin:0}
     </style>
 </head>
 <body>
     <div class="demo-banner">
-        &#127919; Live demo &#183; 300 users across 7 orgs &#183; 14 weeks of Viva Insights data. Explore the deep-dive analytics below.
+        &#127919; Live demo &#183; 300 users across 7 orgs &#183; 14 weeks of Viva Insights data. Every tile below ties back to ROI — minutes saved per action, monthly value, and license investment.
         <a href="index.html">Use your own data &#8594;</a>
     </div>
-
-    <div id="demoNavWrap"><nav class="nav-buttons" id="nav"></nav></div>
 
     <div class="container">
         <div class="demo-loading">
@@ -4295,19 +4296,31 @@ P00300,2026-05-31 00:00:00,0,0,5,0,0,Fourth Coffee,Engineering,APAC,0,0,0,0,0,0
             }, true);
         })();
     </script>
-    <script src="insights-shared.js?v=3"></script>
+    <script src="insights-shared.js?v=4"></script>
     <script>
-        (function(){
-            function paintNav(){
-                const nav = document.getElementById('nav');
-                if (nav && window.InsightsShared) {
-                    nav.outerHTML = window.InsightsShared.renderNav('demo.html');
-                }
+        // Swap the 4-tab strip (Executive Summary / Team Performance / ROI Analysis / Reference)
+        // for the tile-grid nav (same one shown on insights.html, orgs.html, etc.). Demo-only.
+        // All 4 tab sections are unhidden via CSS, so the whole report folds out as one scroll.
+        (function () {
+            function installTileNav() {
+                if (!window.InsightsShared) return false;
+                var tabBar = document.querySelector('.report-tabs');
+                if (!tabBar) return false;                       // report not rendered yet
+                if (document.getElementById('demoTileNav')) return true;  // already installed
+                var wrap = document.createElement('div');
+                wrap.id = 'demoTileNav';
+                wrap.innerHTML = window.InsightsShared.renderNav('demo.html');
+                tabBar.parentNode.insertBefore(wrap, tabBar);
+                tabBar.style.display = 'none';
+                return true;
             }
-            // Paint immediately if possible, and repaint after the demo report renders
-            // (in case the .container wipe also clobbered the nav, e.g. from a future refactor).
-            paintNav();
-            window.addEventListener('load', paintNav);
+            if (installTileNav()) return;
+            // Retry after the demo report finishes rendering into .container.
+            var tries = 0;
+            var iv = setInterval(function () {
+                if (installTileNav() || ++tries > 40) clearInterval(iv);
+            }, 100);
+            window.addEventListener('load', installTileNav);
         })();
     </script>
 </body>

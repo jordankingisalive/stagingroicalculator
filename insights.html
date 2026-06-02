@@ -38,7 +38,8 @@
         <main id="main"></main>
         <div id="footer"></div>
     </div>
-    <script src="insights-shared.js?v=3"></script>
+    <script src="insights-shared.js?v=6"></script>
+    <script src="insights-tabs.js?v=1"></script>
     <script>
         document.getElementById('nav').outerHTML = InsightsShared.renderNav('insights.html');
         document.getElementById('footer').outerHTML = InsightsShared.renderFooter();
@@ -46,113 +47,8 @@
             const main = document.getElementById('main');
             const data = InsightsShared.loadSharedData();
             if (!data) { InsightsShared.renderEmptyState(main, 'Adoption Insights'); return; }
-            render(data, main);
+            InsightsTabs.renderAdoption(main, data);
         })();
-
-        function render(data, main) {
-            const personIndex = data.personIndex;
-            const sortedDates = data.sortedDates;
-            const cfg = data.config;
-            const cohorts = InsightsShared.computeCohorts(personIndex, sortedDates, cfg);
-            const totalUsers = cohorts.totals.count;
-            const habitualOrBetter = cohorts.rows
-                .filter(r => r.name === 'Power Users' || r.name === 'Habitual Users')
-                .reduce((s, r) => s + r.count, 0);
-
-            // ── KPI row ──
-            const kpis = `
-                <div class="kpi-row">
-                    <div class="kpi"><div class="label">Total Licensed Users</div><div class="value">${InsightsShared.fmtInt(totalUsers)}</div><div class="sub">across ${data.sortedDates.length} weeks</div></div>
-                    <div class="kpi"><div class="label">Power + Habitual</div><div class="value">${InsightsShared.fmtInt(habitualOrBetter)}</div><div class="sub">${InsightsShared.fmtPct(habitualOrBetter / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
-                    <div class="kpi"><div class="label">Monthly Value</div><div class="value">${InsightsShared.fmtMoneyShort(cohorts.totals.monthlyValue)}</div><div class="sub">${cohorts.totals.roi.toFixed(1)}x ROI</div></div>
-                    <div class="kpi"><div class="label">Window</div><div class="value">${data.sortedDates.length}w</div><div class="sub">${data.dateRange}</div></div>
-                </div>`;
-
-            // ── Trajectory ──
-            const trajectory = InsightsShared.computeCohortTrajectory(personIndex, sortedDates);
-            const trajectorySvg = InsightsShared.svgStackedArea(trajectory, { width: 880, height: 320 });
-            const trajectoryCard = `
-                <div class="insights-card">
-                    <h2>Cohort trajectory ${InsightsShared.tooltip({ label: 'How many users are in each Usage Threshold cohort at the end of each weekly snapshot.', math: 'For each person at each week W: avg12(W) = mean of actions over [W-77d, W], habit12(W) = COUNTROWS(actions>=1 over that window) >= 9. Power = avg12>=20 AND habit; Habitual = avg12>=8 AND habit; Novice = avg12>=1; Low = avg12>0; else Non.', source: 'Power BI Super User Adoption template (Usage Threshold calculated column).' })}</h2>
-                    <p class="lede">Per-user threshold reclassified at each week's trailing 12-week window. Shows whether your base is shifting up the engagement ladder or stalling.</p>
-                    <div class="chart-wrapper">${trajectorySvg}</div>
-                    ${InsightsShared.mathBlock({ label: 'Cohort assignment per week', formula: 'avg12 = mean(actions[W-77d..W])  habit12 = count(actions>=1 in window) >= 9\nPower    : avg12 >= 20 AND habit12\nHabitual : avg12 >=  8 AND habit12\nNovice   : avg12 >=  1\nLow      : avg12 >   0\nNon      : avg12 =   0', note: 'Stacked area = persons-per-cohort at each weekly snapshot. Re-classification at each week mirrors the Power BI Adoption template.' })}
-                </div>`;
-
-            // ── Migration matrix (last 4w vs prior 4w) ──
-            const migration = InsightsShared.computeMigration(personIndex, sortedDates, 4);
-            let migrationCard = '';
-            if (migration) {
-                const m = migration.matrix;
-                const cohortOrder = InsightsShared.COHORT_ORDER;
-                let rowsHtml = '';
-                let upTotal = 0, downTotal = 0, sameTotal = 0;
-                cohortOrder.forEach((from, fi) => {
-                    let cells = `<td class="row-label">${from}</td>`;
-                    cohortOrder.forEach((to, ti) => {
-                        const v = m[from][to];
-                        let cls = '';
-                        if (fi === ti) cls = 'diagonal';
-                        else if (ti < fi) cls = 'up';
-                        else cls = 'down';
-                        if (fi === ti) sameTotal += v;
-                        else if (ti < fi) upTotal += v;
-                        else downTotal += v;
-                        cells += `<td class="${cls}">${v || ''}</td>`;
-                    });
-                    rowsHtml += `<tr>${cells}</tr>`;
-                });
-                migrationCard = `
-                    <div class="insights-card">
-                        <h2>Cohort migration (last 4 weeks vs prior 4 weeks) ${InsightsShared.tooltip({ label: 'How many users moved up, stayed, or moved down in cohort between the two 4-week windows.', math: 'For each person P: priorCohort = cohort at week (latest - 4). recentCohort = cohort at latest week. Matrix[priorCohort][recentCohort] += 1. Upper triangle (ti<fi) = moved UP; diagonal = stayed; lower (ti>fi) = moved DOWN.' })}</h2>
-                        <p class="lede">Rows = where each user was at <strong>${migration.priorLabel}</strong>. Columns = where they are at <strong>${migration.recentLabel}</strong>. Green = moved up, red = moved down, neutral = stayed.</p>
-                        <div class="kpi-row">
-                            <div class="kpi" style="border-left-color:#10b981;"><div class="label">Moved Up</div><div class="value">${InsightsShared.fmtInt(upTotal)}</div><div class="sub">${InsightsShared.fmtPct(upTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
-                            <div class="kpi" style="border-left-color:#94A3B8;"><div class="label">Stayed</div><div class="value">${InsightsShared.fmtInt(sameTotal)}</div><div class="sub">${InsightsShared.fmtPct(sameTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
-                            <div class="kpi" style="border-left-color:#ef4444;"><div class="label">Moved Down</div><div class="value">${InsightsShared.fmtInt(downTotal)}</div><div class="sub">${InsightsShared.fmtPct(downTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
-                        </div>
-                        <div style="overflow-x:auto;">
-                            <table class="migration-table">
-                                <thead>
-                                    <tr><th>From &darr; / To &rarr;</th>${cohortOrder.map(c => `<th>${c}</th>`).join('')}</tr>
-                                </thead>
-                                <tbody>${rowsHtml}</tbody>
-                            </table>
-                        </div>
-                        ${InsightsShared.mathBlock({ label: 'Migration math', formula: 'priorCohort(P)  = cohort at week (latest - 4)\nrecentCohort(P) = cohort at week  latest\nUp   = users where recent index < prior index   (ladder up)\nSame = users where recent index = prior index\nDown = users where recent index > prior index   (ladder down)', note: 'Order: Power(0), Habitual(1), Novice(2), Low(3), Non(4).' })}
-                    </div>`;
-            }
-
-            // ── Time-to-habit ──
-            const tth = InsightsShared.computeTimeToHabit(personIndex);
-            let tthCard = '';
-            if (tth.count > 0) {
-                const histData = tth.histogram.map((v, i) => ({
-                    label: (i === tth.histogram.length - 1 ? `${i}+w` : `${i}w`),
-                    value: v
-                }));
-                tthCard = `
-                    <div class="insights-card">
-                        <h2>Time to habit ${InsightsShared.tooltip({ label: 'How long it takes a typical user to graduate from first-touch to Habitual or Power status.', math: 'For each person P with any week classified Power or Habitual: firstAction = min(week where actions>0). firstHabit = min(week classified Power or Habitual). TTH(P) = (firstHabit - firstAction) / 7 days.' })}</h2>
-                        <p class="lede">For each user who reached Power or Habitual status, weeks elapsed between their first non-zero action week and their first habit week. This is the #1 metric for whether onboarding is working.</p>
-                        <div class="kpi-row">
-                            <div class="kpi"><div class="label">Users Who Reached Habit</div><div class="value">${InsightsShared.fmtInt(tth.count)}</div><div class="sub">${InsightsShared.fmtPct(tth.count / Math.max(totalUsers,1) * 100, 1)} of total</div></div>
-                            <div class="kpi"><div class="label">Median Weeks</div><div class="value">${tth.median}</div><div class="sub">half got there faster</div></div>
-                            <div class="kpi"><div class="label">Mean Weeks</div><div class="value">${tth.mean.toFixed(1)}</div><div class="sub">average</div></div>
-                        </div>
-                        <div class="chart-wrapper">${InsightsShared.svgBarChart(histData, { width: 880, height: 260, color: '#00D4FF' })}</div>
-                        ${InsightsShared.mathBlock({ label: 'Time-to-habit per person', formula: 'TTH(P) weeks = (firstHabitWeek(P) - firstActionWeek(P)) / 7\nmedian = 50th percentile of {TTH(P) : P reached habit}\nmean   = sum(TTH) / count', note: 'Bar i = number of users whose TTH equals i weeks. The final bar (i+) = the right-tail bucket.' })}
-                    </div>`;
-            } else {
-                tthCard = `
-                    <div class="insights-card">
-                        <h2>Time to habit</h2>
-                        <p class="lede">No users in this dataset have a clearly-bounded first-action &rarr; first-habit transition (need at least 12 weeks of pre-habit history). This view will populate as more weeks accumulate.</p>
-                    </div>`;
-            }
-
-            main.innerHTML = kpis + trajectoryCard + migrationCard + tthCard;
-        }
     </script>
 </body>
 </html>

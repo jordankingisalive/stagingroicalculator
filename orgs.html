@@ -36,7 +36,8 @@
         <main id="main"></main>
         <div id="footer"></div>
     </div>
-    <script src="insights-shared.js?v=3"></script>
+    <script src="insights-shared.js?v=6"></script>
+    <script src="insights-tabs.js?v=1"></script>
     <script>
         document.getElementById('nav').outerHTML = InsightsShared.renderNav('orgs.html');
         document.getElementById('footer').outerHTML = InsightsShared.renderFooter();
@@ -44,162 +45,8 @@
             const main = document.getElementById('main');
             const data = InsightsShared.loadSharedData();
             if (!data) { InsightsShared.renderEmptyState(main, 'Organizations'); return; }
-            render(data, main);
+            InsightsTabs.renderOrgs(main, data);
         })();
-
-        function render(data, main) {
-            const personIndex = data.personIndex;
-            const sortedDates = data.sortedDates;
-            const cfg = data.config;
-
-            // Group persons by orgAgg
-            const byOrg = {};
-            Object.entries(personIndex).forEach(([pid, p]) => {
-                const o = p.orgAgg || 'Other';
-                if (!byOrg[o]) byOrg[o] = [];
-                byOrg[o].push({ pid, p });
-            });
-
-            // For each org, compute summary stats + sparkline + cohort distribution at last week
-            const orgs = Object.entries(byOrg).map(([orgName, persons]) => {
-                const userCount = persons.length;
-                // Weekly avg actions per active user
-                const weeklyAvg = sortedDates.map(d => {
-                    let withActions = 0, sumActions = 0;
-                    persons.forEach(({ p }) => {
-                        const wk = p.weeks.find(w => w.d === d);
-                        if (wk && wk.a > 0) { withActions += 1; sumActions += wk.a; }
-                    });
-                    return withActions > 0 ? sumActions / withActions : 0;
-                });
-                // Cohort distribution at last week
-                const cohortCounts = { 'Power Users': 0, 'Habitual Users': 0, 'Novice Users': 0, 'Low Users': 0, 'Non Users': 0 };
-                persons.forEach(({ p }) => {
-                    const last = p.weeks[p.weeks.length - 1];
-                    if (!last) return;
-                    const t = last.threshold || 'Non Users';
-                    cohortCounts[t] = (cohortCounts[t] || 0) + 1;
-                });
-                const habitOrPower = cohortCounts['Power Users'] + cohortCounts['Habitual Users'];
-                const habitPct = userCount > 0 ? (habitOrPower / userCount) * 100 : 0;
-                // ROI for this org's slice
-                const orgCohorts = InsightsShared.computeCohorts(
-                    Object.fromEntries(persons.map(({ pid, p }) => [pid, p])),
-                    sortedDates,
-                    cfg
-                );
-                // Trend = last 4w avg vs prior 4w avg
-                const n = weeklyAvg.length;
-                const recent4 = weeklyAvg.slice(Math.max(0, n - 4));
-                const prior4 = weeklyAvg.slice(Math.max(0, n - 8), Math.max(0, n - 4));
-                const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
-                const recentAvg = avg(recent4);
-                const priorAvg = avg(prior4);
-                const trendPct = priorAvg > 0 ? ((recentAvg - priorAvg) / priorAvg) * 100 : 0;
-                return {
-                    orgName, userCount, weeklyAvg, cohortCounts, habitOrPower, habitPct,
-                    monthlyValue: orgCohorts.totals.monthlyValue,
-                    roi: orgCohorts.totals.roi,
-                    avgActionsPerUserWeek: recentAvg,
-                    trendPct
-                };
-            });
-
-            // Default sort: monthly value desc
-            window._orgs = orgs;
-            window._cfg = cfg;
-            window._sortKey = 'monthlyValue';
-            window._sortDir = -1;
-
-            main.innerHTML = `
-                <div class="insights-card">
-                    <h2>${orgs.length} ${(data.groupLabel || 'organization').toLowerCase()}${orgs.length === 1 ? '' : 's'} ${InsightsShared.tooltip({ label: 'Distinct grouping values rolled up using the Power BI "Organization (Aggregated)" rule.', math: 'For each person P: group(P) = chosen grouping field (default Organization). If a group has <5 distinct persons or is blank/N/A, it rolls into "Other". Per group: monthlyValue = sum over its persons of cohort-specific monetized value (see Adoption Insights tooltip).' })}</h2>
-                    <p class="lede">Aggregated using the Power BI &ldquo;Organization (Aggregated)&rdquo; rule (groups with fewer than 5 distinct users or blank labels roll into <strong>Other</strong>). Click any row to expand its cohort breakdown.</p>
-                    <div class="controls">
-                        <label>Sort by:</label>
-                        <select id="sortKey">
-                            <option value="monthlyValue">Monthly Value</option>
-                            <option value="userCount">User Count</option>
-                            <option value="habitPct">% Habitual+Power</option>
-                            <option value="avgActionsPerUserWeek">Avg Actions/User/Week (last 4w)</option>
-                            <option value="roi">ROI</option>
-                            <option value="trendPct">4w Trend %</option>
-                        </select>
-                        <label>Direction:</label>
-                        <select id="sortDir">
-                            <option value="-1">High &rarr; Low</option>
-                            <option value="1">Low &rarr; High</option>
-                        </select>
-                    </div>
-                    <div style="overflow-x:auto;">
-                        <table class="org-table" id="orgTable"><thead></thead><tbody></tbody></table>
-                    </div>
-                    ${InsightsShared.mathBlock({ label: 'Per-row math', formula: '% Habit+Power = (PowerUsers + HabitualUsers) / users  &times; 100\nAvg Actions/User/Week = mean over last 4 weeks of (sum(actions) / count(users with actions))\nTrend (4w)  = (recent4Avg - prior4Avg) / prior4Avg  &times; 100\nMonthly Value = &Sigma; cohort-weight &times; weekly_actions &times; minutesPerAction / 60 &times; professionalRate &times; 4.33\nROI = monthlyValue / (users &times; licenseCost)', note: 'Cohort weights reflect the Adjusted Compounding Adoption Hypothesis: Power=1.0, Habitual=0.7, Novice=0.4, Low=0.1, Non=0.' })}
-                </div>`;
-            document.getElementById('sortKey').addEventListener('change', e => { window._sortKey = e.target.value; renderTable(); });
-            document.getElementById('sortDir').addEventListener('change', e => { window._sortDir = parseInt(e.target.value); renderTable(); });
-            renderTable();
-        }
-
-        function renderTable() {
-            const orgs = window._orgs.slice().sort((a, b) => {
-                const av = a[window._sortKey] || 0, bv = b[window._sortKey] || 0;
-                return (av - bv) * window._sortDir;
-            });
-            const table = document.getElementById('orgTable');
-            table.querySelector('thead').innerHTML = `
-                <tr>
-                    <th>Organization</th>
-                    <th class="num">Users</th>
-                    <th class="num">% Habit+Power</th>
-                    <th class="num">Avg Actions/User/Week</th>
-                    <th>Trend (last 4w)</th>
-                    <th>14-week trend</th>
-                    <th class="num">Monthly Value</th>
-                    <th class="num">ROI</th>
-                </tr>`;
-            const tbody = table.querySelector('tbody');
-            tbody.innerHTML = orgs.map((o, i) => {
-                const trendColor = o.trendPct > 5 ? '#10b981' : o.trendPct < -5 ? '#ef4444' : '#94A3B8';
-                const trendArrow = o.trendPct > 5 ? '&uarr;' : o.trendPct < -5 ? '&darr;' : '&rarr;';
-                const sparkColor = o.trendPct >= 0 ? '#10b981' : '#ef4444';
-                return `
-                <tr class="expandable" data-idx="${i}" onclick="toggleDetail(${i})">
-                    <td><strong>${escapeHtml(o.orgName)}</strong></td>
-                    <td class="num">${InsightsShared.fmtInt(o.userCount)}</td>
-                    <td class="num">${InsightsShared.fmtPct(o.habitPct, 1)}</td>
-                    <td class="num">${o.avgActionsPerUserWeek.toFixed(1)}</td>
-                    <td><span style="color:${trendColor};font-weight:600;">${trendArrow} ${o.trendPct.toFixed(0)}%</span></td>
-                    <td>${InsightsShared.svgSparkline(o.weeklyAvg, { color: sparkColor, width: 120, height: 26 })}</td>
-                    <td class="num">${InsightsShared.fmtMoneyShort(o.monthlyValue)}</td>
-                    <td class="num">${o.roi.toFixed(1)}x</td>
-                </tr>
-                <tr id="detail-${i}" style="display:none;"><td colspan="8" style="padding:0;">
-                    <div class="org-detail">
-                        <strong style="color:var(--text-primary,#F1F5F9);">Cohort distribution at latest week</strong>
-                        <div style="margin-top:0.75rem;">
-                            ${Object.entries(o.cohortCounts).map(([name, count]) => {
-                                if (!count) return '';
-                                const color = InsightsShared.COHORT_COLORS[name] || '#94A3B8';
-                                return `<span class="cohort-pill" style="background:${color};">${name}: ${count}</span>`;
-                            }).join('')}
-                        </div>
-                        <div style="margin-top:1rem;color:var(--text-secondary,#94A3B8);font-size:0.85rem;">
-                            ${o.userCount} users &middot; ${InsightsShared.fmtMoneyShort(o.monthlyValue)}/mo &middot; ${o.roi.toFixed(1)}x ROI
-                        </div>
-                    </div>
-                </td></tr>`;
-            }).join('');
-        }
-
-        function toggleDetail(i) {
-            const row = document.getElementById('detail-' + i);
-            row.style.display = row.style.display === 'none' ? '' : 'none';
-        }
-
-        function escapeHtml(s) {
-            return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
-        }
     </script>
 </body>
 </html>

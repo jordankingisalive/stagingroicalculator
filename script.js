@@ -2370,11 +2370,14 @@ function renderResults() {
             </div>
 
             <!-- TAB BAR -->
-            <div class="report-tabs" style="display:flex; gap:0; margin:1.5rem 0 0; border-bottom:3px solid var(--border, rgba(255,255,255,0.08));">
-                <button class="report-tab active" data-tab="summary" onclick="switchReportTab('summary')" style="flex:1; padding:1.25rem 1rem; font-size:1.15rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid var(--copilot-blue); background:var(--surface-raised, #253449); color:var(--text-primary, #F1F5F9); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s;">📊 Executive Summary</button>
-                <button class="report-tab" data-tab="teams" onclick="switchReportTab('teams')" style="flex:1; padding:1.25rem 1rem; font-size:1.15rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s;">👥 Team Performance</button>
-                <button class="report-tab" data-tab="roi" onclick="switchReportTab('roi')" style="flex:1; padding:1.25rem 1rem; font-size:1.15rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s;">💰 ROI Analysis</button>
-                <button class="report-tab" data-tab="reference" onclick="switchReportTab('reference')" style="flex:1; padding:1.25rem 1rem; font-size:1.15rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s;">📖 Reference</button>
+            <div class="report-tabs" style="display:flex; gap:0; margin:1.5rem 0 0; border-bottom:3px solid var(--border, rgba(255,255,255,0.08)); flex-wrap:wrap;">
+                <button class="report-tab active" data-tab="summary"   onclick="switchReportTab('summary')"   style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid var(--copilot-blue); background:var(--surface-raised, #253449); color:var(--text-primary, #F1F5F9); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128202; Executive Summary</button>
+                <button class="report-tab"        data-tab="adoption"  onclick="switchReportTab('adoption')"  style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128200; Adoption Insights</button>
+                <button class="report-tab"        data-tab="orgs"      onclick="switchReportTab('orgs')"      style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#127970; Organizations</button>
+                <button class="report-tab"        data-tab="apps"      onclick="switchReportTab('apps')"      style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#129513; Apps &amp; Behavior</button>
+                <button class="report-tab"        data-tab="risk"      onclick="switchReportTab('risk')"      style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128680; Risk &amp; Waste</button>
+                <button class="report-tab"        data-tab="roi"       onclick="switchReportTab('roi')"       style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128176; ROI &amp; Forecast</button>
+                <button class="report-tab"        data-tab="reference" onclick="switchReportTab('reference')" style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128214; Reference</button>
             </div>
 
             <!-- TAB: Executive Summary -->
@@ -2532,8 +2535,15 @@ function renderResults() {
 
             </div><!-- end TAB: Executive Summary -->
 
-            <!-- TAB: Team Performance -->
-            <div class="report-tab-content" id="tab-teams" style="display:none;">
+            <!-- TAB: Adoption Insights -->
+            <div class="report-tab-content" id="tab-adoption" style="display:none;">
+                <div class="insights-host" data-tab-host="adoption">
+                    <p style="color:var(--text-secondary, #94A3B8); padding:2rem; text-align:center;">Loading adoption insights&hellip;</p>
+                </div>
+            </div><!-- end TAB: Adoption Insights -->
+
+            <!-- TAB: Organizations (was Team Performance) -->
+            <div class="report-tab-content" id="tab-orgs" style="display:none;">
 
             ${section('Top 10 by Value Generated', `<div class="roi-table-container" style="box-shadow:none;border:none;padding:0;margin:0;">
                 <p style="text-align:center; margin-bottom:1rem; color: var(--text-secondary); font-size: 0.9rem;">Monthly value = weekly actions × ${config.minutesPerAction} min/action ÷ 60 × $${config.professionalRate}/hr × 4.33 weeks</p>
@@ -2658,14 +2668,38 @@ function renderResults() {
             </div>
             `)}<!-- end All Teams -->
 
-            </div><!-- end TAB: Team Performance -->
+            <!-- Interactive org breakdown (ported from standalone Organizations page) -->
+            <div class="insights-host" data-tab-host="orgs">
+                <p style="color:var(--text-secondary, #94A3B8); padding:2rem; text-align:center;">Loading organization breakdown&hellip;</p>
+            </div>
+
+            </div><!-- end TAB: Organizations -->
+
+            <!-- TAB: Apps and Behavior -->
+            <div class="report-tab-content" id="tab-apps" style="display:none;">
+                <div class="insights-host" data-tab-host="apps">
+                    <p style="color:var(--text-secondary, #94A3B8); padding:2rem; text-align:center;">Loading app attribution&hellip;</p>
+                </div>
+            </div><!-- end TAB: Apps and Behavior -->
+
+            <!-- TAB: Risk and Waste -->
+            <div class="report-tab-content" id="tab-risk" style="display:none;">
+                <div class="insights-host" data-tab-host="risk">
+                    <p style="color:var(--text-secondary, #94A3B8); padding:2rem; text-align:center;">Loading risk analysis&hellip;</p>
+                </div>
+            </div><!-- end TAB: Risk and Waste -->
 
             <!-- TAB: ROI Analysis -->
             <div class="report-tab-content" id="tab-roi" style="display:none;">
 
             ${projections.breakEvenHtml}${projections.opportunityHtml}${projections.projHtml}
 
-            </div><!-- end TAB: ROI Analysis -->
+            <!-- Forecast and sensitivity (ported from standalone Forecast page) -->
+            <div class="insights-host" data-tab-host="forecast">
+                <p style="color:var(--text-secondary, #94A3B8); padding:2rem; text-align:center;">Loading forecast&hellip;</p>
+            </div>
+
+            </div><!-- end TAB: ROI and Forecast -->
 
             <!-- TAB: Reference -->
             <div class="report-tab-content" id="tab-reference" style="display:none;">
@@ -2745,6 +2779,31 @@ function renderResults() {
     if (loadingEl) loadingEl.style.display = 'none';
     document.querySelector('.container').innerHTML = html;
     resultsDisplayed = true;
+
+    // Populate the 5 ported in-report analytics tabs from shared session data
+    if (window.InsightsTabs && window.InsightsShared) {
+        try {
+            const _sharedData = window.InsightsShared.loadSharedData();
+            if (_sharedData) {
+                const _tabMap = {
+                    adoption: window.InsightsTabs.renderAdoption,
+                    orgs:     window.InsightsTabs.renderOrgs,
+                    apps:     window.InsightsTabs.renderApps,
+                    risk:     window.InsightsTabs.renderAtRisk,
+                    forecast: window.InsightsTabs.renderForecast
+                };
+                Object.entries(_tabMap).forEach(([_k, _fn]) => {
+                    const _host = document.querySelector('.insights-host[data-tab-host="' + _k + '"]');
+                    if (_host && _fn) {
+                        try { _fn(_host, _sharedData); }
+                        catch (e) { console.warn('[InsightsTabs] ' + _k + ' render failed', e); }
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('[InsightsTabs] population failed', e);
+        }
+    }
 
     // Initialize table sorting after rendering
     initTableSorting();

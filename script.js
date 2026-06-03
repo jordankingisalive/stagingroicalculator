@@ -1933,7 +1933,7 @@ function buildProjectionTables(metrics, sortedTeams) {
     const tierBanner = buildTierAccuracyBanner(uploadedData);
     const tierColumnLabel = tierCohorts ? 'User Cohort' : 'User Tier';
     const tierColumnTip = tierCohorts
-        ? 'Per-user Usage Threshold cohorts. Power Users = avg ≥20 actions/wk with ≥9 of 12 weeks active. Habitual = ≥8 + habit. Novice = ≥1. Low = >0. Non-users = 0. Matches the Power BI Super User Impact report.'
+        ? 'Per-user Usage Threshold cohorts. Power Users = avg ≥20 actions/wk with active in ≥9 of last 12 weeks. Habitual = ≥8 + habit. Novice = ≥1. Low = >0. Non-users = 0. Matches the Super User Adoption report (Usage Threshold column).'
         : 'Teams ranked by actions per user and grouped into percentile bands. Top 10% are your champions; Bottom 25% your biggest growth opportunity. Note: not true per-user tiers — upload a Viva Insights per-person export for those.';
 
     const tierHtml = section('Usage Tier Value Distribution', `

@@ -1,22 +1,27 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>M365 Copilot ROI - Live Demo Report</title>
-    <link rel="stylesheet" href="styles.css?v=31">
-    <script type="text/javascript">(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y)})(window,document,"clarity","script","wt5uwqabv0");</script>
+    <script>(function(){try{var t=localStorage.getItem('cri_theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+    <link rel="stylesheet" href="styles.css?v=45">
+    <!-- Analytics run only on the hosted site; local and offline copies stay request-free. -->
+    <script type="text/javascript">if (location.protocol !== 'file:' && /(^|\.)github\.io$/i.test(location.hostname)) {(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y)})(window,document,"clarity","script","wt5uwqabv0");}</script>
     <style>
         .demo-banner{background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:.75rem 1.5rem;text-align:center;font-size:.95rem;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.15)}
         .demo-banner a{color:#fff;text-decoration:underline;margin-left:.5rem}
-        .demo-loading{min-height:80vh;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#F1F5F9}
+        .demo-loading{min-height:80vh;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--text-primary)}
     </style>
 </head>
 <body>
     <div class="demo-banner">
-        &#127919; Live demo &#183; 300 users across 7 orgs &#183; 14 weeks of Viva Insights data. Every tile below ties back to ROI â€” minutes saved per action, monthly value, and license investment.
+        Live demo &#183; 300 users across 7 orgs &#183; 14 weeks of Viva Insights data. Every tile below ties back to ROI — minutes saved per action, monthly value, and license investment.
         <a href="index.html">Use your own data &#8594;</a>
     </div>
+
+    <!-- Toggle slot lives outside .container, which script.js replaces wholesale. -->
+    <div class="header-actions" style="max-width:1200px;margin:1.25rem auto -1rem;padding:0 2rem;justify-content:flex-end;"></div>
 
     <div class="container">
         <div class="demo-loading">
@@ -25,9 +30,9 @@
         </div>
     </div>
 
-    <footer style="text-align:center;padding:1rem;color:#94A3B8;font-size:.85rem">
+    <footer style="text-align:center;padding:1rem;color:var(--text-tertiary);font-size:.85rem">
         M365 Copilot Productivity ROI Calculator Suite | Demo Report |
-        <a href="index.html" style="color:#00D4FF;">Back to Calculator</a>
+        <a href="index.html" style="color:var(--accent);">Back to Calculator</a>
     </footer>
 
     <script id="demoData" type="text/csv">
@@ -4234,14 +4239,14 @@ P00300,2026-05-24 00:00:00,0,0,5,0,0,Fourth Coffee,Engineering,APAC,0,0,0,0,0,0
 P00300,2026-05-31 00:00:00,0,0,5,0,0,Fourth Coffee,Engineering,APAC,0,0,0,0,0,0
     </script>
 
-    <script src="lib/jspdf.umd.min.js"></script>
-    <script src="lib/html2canvas.min.js"></script>
-    <script src="lib/docx.umd.js"></script>
-    <script src="lib/pptxgen.bundle.js"></script>
-    <script src="lib/jszip.min.js"></script>
-    <script src="insights-shared.js?v=6"></script>
-    <script src="insights-tabs.js?v=1"></script>
-    <script src="script.js?v=37"></script>
+    <script src="lib/jspdf.umd.min.js?v=45"></script>
+    <script src="lib/html2canvas.min.js?v=45"></script>
+    <script src="lib/docx.umd.js?v=45"></script>
+    <script src="lib/pptxgen.bundle.js?v=45"></script>
+    <script src="lib/jszip.min.js?v=45"></script>
+    <script src="insights-shared.js?v=45"></script>
+    <script src="insights-tabs.js?v=45"></script>
+    <script src="script.js?v=45"></script>
 
     <script>
         (function() {

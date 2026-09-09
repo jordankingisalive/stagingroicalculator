@@ -1,6 +1,6 @@
 # M365 Copilot Productivity ROI Calculator
 
-A web-based tool for analyzing Microsoft 365 Copilot usage data and calculating productivity ROI projections. All data processing happens locally in your browser—nothing is sent to any server.
+A web-based tool for analyzing Microsoft 365 Copilot usage data and calculating productivity ROI projections. All data processing happens locally in your browser—your CSV file and its contents are never uploaded.
 
 **Live site:** https://jordankingisalive.github.io/CopilotROICalculator/
 
@@ -20,12 +20,12 @@ The tool handles both long-format (with dates) and wide-format CSV exports, auto
 
 ## Privacy
 
-All CSV parsing and calculations happen in your browser using JavaScript. No data is uploaded anywhere. When you close the tab, everything is cleared from memory.
+All CSV parsing and calculations happen in your browser using JavaScript. Your CSV file is never uploaded. When you close the tab, everything is cleared from memory.
 
 - No server-side processing
-- No data storage or cookies
-- No tracking or analytics
-- No external API calls (except loading the PDF library from CDN)
+- No CSV data storage
+- The hosted site loads Microsoft Clarity for product analytics (session replay, cookies); the downloaded local version makes zero external requests. See [PRIVACY.md](PRIVACY.md).
+- All libraries bundled locally — no CDN requests. On the hosted site the only external request is Microsoft Clarity; the local version makes zero external requests.
 
 This makes it safe for analyzing sensitive enterprise data. See [PRIVACY.md](PRIVACY.md) for technical details.
 
@@ -35,12 +35,16 @@ This makes it safe for analyzing sensitive enterprise data. See [PRIVACY.md](PRI
 
 ### 1. Export Your Data
 
-Open your Copilot-Insight Power BI report (from https://aka.ms/decodingsuperusage) and export the usage heatmap:
+The calculator accepts one format: a **Viva Insights person query** export.
 
-1. Ctrl+Left Click ALL options on the left side of the heatmap
-2. Click the heatmap visualization
-3. Click the three dots → Export → Save
-4. Save as `data.csv`
+1. Go to https://analysis.insights.cloud.microsoft and open **Analysis results**
+2. Click **Create analysis** → **Person query** → **Set up analysis**
+3. Time period: Last 6 months (rolling) · Group by: **Week** · Filter: Is Active = True
+4. Attributes: Organization, FunctionType, TimeZone
+5. Metrics: **Microsoft 365 Copilot — all metrics**
+6. Run the query, then download the result as **CSV** from **Analysis results**
+
+`Group by Week` is required — cohort tiers need at least 12 consecutive weekly rows per person.
 
 ### 2. Configure Settings
 
@@ -90,27 +94,24 @@ Works in Chrome, Edge, Firefox, and Safari (recent versions).
 
 ## Technical Details
 
-Built with vanilla HTML, CSS, and JavaScript—no frameworks. Uses the FileReader API for client-side file processing and html2pdf.js (via CDN) for PDF generation.
+Built with vanilla HTML, CSS, and JavaScript—no frameworks. Uses the FileReader API for client-side file processing and html2pdf.js (bundled locally) for PDF generation.
 
 ### CSV Format Support
 
-**Long format** (with dates):
+One supported format: the **Viva Insights person query** export — one row per person per week.
+
 ```csv
-Date,Team/Division Name,Active Users,Enabled Users,Total Actions,...
-2025-08-10,Team A,45,50,2340,...
-2025-08-17,Team A,47,50,2567,...
+PersonId,MetricDate,Total Copilot actions taken,Total Copilot active days,Total Copilot enabled days,Copilot assisted hours,Organization,...
+P1,2025-01-06 00:00:00,25,5,5,3.5,Contoso Ltd,...
+P1,2025-01-13 00:00:00,25,5,5,3.5,Contoso Ltd,...
 ```
 
-The tool groups by organization, sorts by date, and uses the most recent record.
+`PersonId`, `MetricDate` and `Total Copilot actions taken` are required. Organization,
+FunctionType, Region, active/enabled days, assisted hours and per-app action columns are
+used when present. British and Spanish column headers are translated automatically.
 
-**Wide format** (aggregated):
-```csv
-Team/Division Name,Active Users,Enabled Users,Total Actions,...
-Team A,45,50,25340,...
-Team B,32,40,18920,...
-```
-
-Processed directly without aggregation.
+Any other CSV (including the retired Super Usage Report heatmap export) is rejected with
+on-screen guidance rather than parsed.
 
 ### ROI Calculation
 
@@ -178,5 +179,5 @@ Copyright (c) 2025 Jordan King
 ## Acknowledgments
 
 - Built for M365 Copilot customers
-- Data source: [Copilot-Insight Power BI Report](https://aka.ms/decodingsuperusage)
+- Data source: [Viva Insights person query](https://analysis.insights.cloud.microsoft) · related report: [Super User Adoption](https://aka.ms/decodingsuperusage)
 - PDF generation: [html2pdf.js](https://github.com/eKoopmans/html2pdf.js)

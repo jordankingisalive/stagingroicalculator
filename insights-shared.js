@@ -6,14 +6,42 @@
 
 (function (global) {
     const STORAGE_KEY = 'cri_shared_v1';
+    const THEME_KEY = 'cri_theme';
     const COHORT_ORDER = ['Power Users', 'Habitual Users', 'Novice Users', 'Low Users', 'Non Users'];
-    const COHORT_COLORS = {
-        'Power Users':    '#10b981', // green
-        'Habitual Users': '#00D4FF', // cyan
-        'Novice Users':   '#8B5CF6', // purple
-        'Low Users':      '#f59e0b', // gold
-        'Non Users':      '#ef4444'  // red
+
+    // ── Theme-aware colour resolution ────────────────────────────────────────
+    // Charts are emitted as SVG strings, so they need real colour values rather
+    // than var() references. Read them off the root element and cache per theme;
+    // the cache invalidates the moment data-theme changes.
+    let _varCache = { theme: null, vals: {} };
+    function cssVar(name, fallback) {
+        const theme = (document.documentElement.getAttribute('data-theme') || 'dark');
+        if (_varCache.theme !== theme) _varCache = { theme: theme, vals: {} };
+        if (_varCache.vals[name] === undefined) {
+            let v = '';
+            try { v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); } catch (e) {}
+            _varCache.vals[name] = v || fallback || '';
+        }
+        return _varCache.vals[name];
+    }
+
+    // Cohort identity is categorical data encoding, defined by the --cohort-*
+    // ramp in styles.css so both themes stay in lockstep. Exposed as live
+    // getters so existing `IS.COHORT_COLORS[name]` call sites keep working.
+    const COHORT_TOKENS = {
+        'Power Users':    '--cohort-power',
+        'Habitual Users': '--cohort-habitual',
+        'Novice Users':   '--cohort-novice',
+        'Low Users':      '--cohort-low',
+        'Non Users':      '--cohort-non'
     };
+    const COHORT_COLORS = {};
+    Object.keys(COHORT_TOKENS).forEach(name => {
+        Object.defineProperty(COHORT_COLORS, name, {
+            enumerable: true,
+            get: () => cssVar(COHORT_TOKENS[name], '#8892A0')
+        });
+    });
 
     // ── Persistence ──────────────────────────────────────────────────────────
     function saveSharedData(uploadedData, config) {
@@ -96,7 +124,7 @@
                 The <strong>${pageName}</strong> page works with a Viva Insights per-person CSV export.
                 Upload your file on the main page first, then return here. Your data stays in this browser tab only.
             </p>
-            <a href="index.html" style="display: inline-block; padding: 0.85rem 1.75rem; background: linear-gradient(135deg, #2563eb, #00D4FF); color: white; border-radius: 999px; text-decoration: none; font-weight: 600;">
+            <a href="index.html" style="display: inline-block; padding: 0.6875rem 1.375rem; background: var(--accent); color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.875rem;">
                 Go to upload &rarr;
             </a>
         </div>`;
@@ -286,7 +314,7 @@
     function svgSparkline(values, opts = {}) {
         const w = opts.width || 90;
         const h = opts.height || 24;
-        const color = opts.color || '#00D4FF';
+        const color = opts.color || cssVar('--accent', '#4C8DFF');
         if (!values || values.length < 2) return `<svg width="${w}" height="${h}"></svg>`;
         const max = Math.max(...values, 1);
         const min = Math.min(...values, 0);
@@ -331,23 +359,25 @@
         });
 
         // X-axis labels (first, middle, last)
+        const axisInk = cssVar('--text-tertiary', '#6C7684');
+        const gridInk = cssVar('--rule', 'rgba(255,255,255,0.075)');
         const ticks = [];
         const tickIdx = [0, Math.floor(data.length / 2), data.length - 1];
         tickIdx.forEach(i => {
             const x = xAt(i);
-            ticks.push(`<text x="${x.toFixed(1)}" y="${H - padB + 18}" fill="#94A3B8" font-size="11" text-anchor="middle">${data[i].week}</text>`);
+            ticks.push(`<text x="${x.toFixed(1)}" y="${H - padB + 18}" fill="${axisInk}" font-size="11" text-anchor="middle">${data[i].week}</text>`);
         });
         // Y-axis ticks (0, mid, max)
         const yTicks = [0, Math.round(maxTotal / 2), maxTotal].map(v =>
-            `<text x="${padL - 8}" y="${yAt(v).toFixed(1) + 4}" fill="#94A3B8" font-size="11" text-anchor="end">${v.toLocaleString()}</text>
-             <line x1="${padL}" x2="${W - padR}" y1="${yAt(v).toFixed(1)}" y2="${yAt(v).toFixed(1)}" stroke="rgba(255,255,255,0.06)"/>`
+            `<text x="${padL - 8}" y="${yAt(v).toFixed(1) + 4}" fill="${axisInk}" font-size="11" text-anchor="end">${v.toLocaleString()}</text>
+             <line x1="${padL}" x2="${W - padR}" y1="${yAt(v).toFixed(1)}" y2="${yAt(v).toFixed(1)}" stroke="${gridInk}"/>`
         ).join('');
 
         // Legend
         const legend = cohorts.map((c, i) => {
             const lx = padL + i * 130;
             return `<rect x="${lx}" y="${H - 12}" width="10" height="10" fill="${colors[c]}"/>
-                    <text x="${lx + 14}" y="${H - 3}" fill="#94A3B8" font-size="11">${c}</text>`;
+                    <text x="${lx + 14}" y="${H - 3}" fill="${axisInk}" font-size="11">${c}</text>`;
         }).join('');
 
         return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="max-width:100%;height:auto;">
@@ -371,16 +401,18 @@
         const max = Math.max(...data.map(d => d.value), 1);
         const barW = innerW / data.length * 0.7;
         const gap = innerW / data.length * 0.3;
-        const color = opts.color || '#00D4FF';
+        const color = opts.color || cssVar('--accent', '#4C8DFF');
         const valueFmt = opts.valueFmt || (v => v.toLocaleString());
+        const labelInk = cssVar('--text-primary', '#E9ECF1');
+        const axisInk = cssVar('--text-tertiary', '#6C7684');
 
         const bars = data.map((d, i) => {
             const x = padL + i * (barW + gap) + gap / 2;
             const h = (d.value / max) * innerH;
             const y = padT + innerH - h;
             return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}" opacity="0.85"/>
-                    <text x="${(x + barW / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" fill="#F1F5F9" font-size="11" text-anchor="middle">${valueFmt(d.value)}</text>
-                    <text x="${(x + barW / 2).toFixed(1)}" y="${H - 6}" fill="#94A3B8" font-size="11" text-anchor="middle">${d.label}</text>`;
+                    <text x="${(x + barW / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" fill="${labelInk}" font-size="11" text-anchor="middle">${valueFmt(d.value)}</text>
+                    <text x="${(x + barW / 2).toFixed(1)}" y="${H - 6}" fill="${axisInk}" font-size="11" text-anchor="middle">${d.label}</text>`;
         }).join('');
 
         return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="max-width:100%;height:auto;">${bars}</svg>`;
@@ -398,37 +430,99 @@
         const innerW = W - padL - padR;
         if (!data || data.length === 0) return `<svg width="${W}" height="40"></svg>`;
         const max = Math.max(...data.map(d => d.value), 1);
-        const color = opts.color || '#00D4FF';
+        const color = opts.color || cssVar('--accent', '#4C8DFF');
         const fmt = opts.valueFmt || (v => v.toLocaleString());
+        const labelInk = cssVar('--text-primary', '#E9ECF1');
+        const axisInk = cssVar('--text-tertiary', '#6C7684');
 
         const rows = data.map((d, i) => {
             const y = padT + i * rowH;
             const bw = (d.value / max) * innerW;
-            return `<text x="${padL - 10}" y="${y + rowH * 0.65}" fill="#F1F5F9" font-size="12" text-anchor="end">${d.label}</text>
+            return `<text x="${padL - 10}" y="${y + rowH * 0.65}" fill="${labelInk}" font-size="12" text-anchor="end">${d.label}</text>
                     <rect x="${padL}" y="${y + 4}" width="${bw.toFixed(1)}" height="${rowH - 10}" fill="${color}" opacity="0.85" rx="3"/>
-                    <text x="${padL + bw + 6}" y="${y + rowH * 0.65}" fill="#94A3B8" font-size="11">${fmt(d.value)}</text>`;
+                    <text x="${padL + bw + 6}" y="${y + rowH * 0.65}" fill="${axisInk}" font-size="11">${fmt(d.value)}</text>`;
         }).join('');
 
         return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="max-width:100%;height:auto;">${rows}</svg>`;
     }
 
+    // ── Theme toggle ─────────────────────────────────────────────────────────
+    // The <head> of every page applies the stored theme before the stylesheet
+    // resolves, so there is no flash of the wrong theme. This module only owns
+    // the control itself: injection, click handling, persistence.
+    const SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.4v2.6M12 19v2.6M4.2 4.2l1.9 1.9M17.9 17.9l1.9 1.9M2.4 12h2.6M19 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9"/></svg>';
+    const MOON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 14.2A8.4 8.4 0 0 1 9.8 3.6a8.4 8.4 0 1 0 10.6 10.6z"/></svg>';
+
+    function getTheme() {
+        return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    }
+
+    function paintToggle(btn) {
+        const isLight = getTheme() === 'light';
+        // Icon shows the destination, not the current state.
+        btn.innerHTML = isLight ? MOON_ICON : SUN_ICON;
+        btn.setAttribute('aria-pressed', String(!isLight));
+        btn.setAttribute('title', isLight ? 'Switch to dark' : 'Switch to light');
+        btn.setAttribute('aria-label', isLight ? 'Switch to dark theme' : 'Switch to light theme');
+    }
+
+    function setTheme(theme) {
+        const next = theme === 'dark' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+        document.querySelectorAll('.theme-toggle').forEach(paintToggle);
+        document.dispatchEvent(new CustomEvent('cri:themechange', { detail: { theme: next } }));
+    }
+
+    // Injects the control into .header-actions, creating that slot only when the
+    // page has a header but no actions bar, and falling back to the nav rule on
+    // pages that have neither. Silently does nothing when no host exists at all
+    // — same existence-guard discipline as the nav helpers.
+    function mountThemeToggle() {
+        if (document.querySelector('.theme-toggle')) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'theme-toggle';
+        btn.addEventListener('click', () => setTheme(getTheme() === 'light' ? 'dark' : 'light'));
+        paintToggle(btn);
+
+        let slot = document.querySelector('.header-actions');
+        if (!slot) {
+            const host = document.querySelector('header .header-content') || document.querySelector('header');
+            if (host) {
+                slot = document.createElement('div');
+                slot.className = 'header-actions';
+                host.appendChild(slot);
+            }
+        }
+        if (!slot) {
+            const nav = document.querySelector('.nav-buttons');
+            if (!nav) return;
+            btn.classList.add('theme-toggle-nav');
+            nav.appendChild(btn);
+            return;
+        }
+        slot.appendChild(btn);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mountThemeToggle);
+    } else {
+        mountThemeToggle();
+    }
+
     // ── Standard nav for all pages ──────────────────────────────────────────
     const NAV_ITEMS = [
-        { href: 'index.html',       icon: '📊', label: 'Upload & Calculate' },
-        { href: 'insights.html',    icon: '📈', label: 'Adoption Insights' },
-        { href: 'orgs.html',        icon: '🏢', label: 'Organizations' },
-        { href: 'at-risk.html',     icon: '🚨', label: 'Risk & Waste' },
-        { href: 'apps.html',        icon: '🧩', label: 'Apps & Behavior' },
-        { href: 'forecast.html',    icon: '🔮', label: 'Forecast & Sensitivity' },
-        { href: 'Start Here.html',  icon: '🚀', label: 'Adoption Journey' },
-        { href: 'changelog.html',   icon: '📋', label: "What's New" }
+        { href: 'index.html',          label: 'Full Data Analysis' },
+        { href: 'roi-calculator.html', label: 'ROI Calculator' },
+        { href: 'Start Here.html',     label: 'Adoption Journey' },
+        { href: 'changelog.html',      label: "What's New" }
     ];
 
     function renderNav(activeHref) {
         return `<nav class="nav-buttons">${NAV_ITEMS.map(item => {
             const active = item.href === activeHref ? ' nav-btn-active' : '';
             return `<a href="${item.href}" class="nav-btn${active}">
-                <span class="nav-icon">${item.icon}</span>
                 <span class="nav-text">${item.label}</span>
             </a>`;
         }).join('')}</nav>`;
@@ -484,14 +578,20 @@
                 &middot;
                 <a href="https://aka.ms/decodingsuperusage" target="_blank" rel="noopener">Super Usage Report</a>
             </p>
+            <p class="footer-nav"><a href="run-locally.html">Run Locally</a></p>
         </footer>`;
     }
 
     // Expose
     global.InsightsShared = {
         STORAGE_KEY,
+        THEME_KEY,
         COHORT_ORDER,
         COHORT_COLORS,
+        cssVar,
+        getTheme,
+        setTheme,
+        mountThemeToggle,
         saveSharedData,
         loadSharedData,
         hasSharedData,

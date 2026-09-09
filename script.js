@@ -52,41 +52,46 @@ document.addEventListener('DOMContentLoaded', function() {
     const fileInput = document.getElementById('fileInput');
     const fileSelectBtn = document.getElementById('fileSelectBtn');
 
+    // Pages that reuse script.js without the upload UI (e.g. demo.html) have none
+    // of these elements — bind defensively so the rest of this handler still runs.
+
     // File select button
-    fileSelectBtn.addEventListener('click', () => fileInput.click());
+    if (fileSelectBtn && fileInput) fileSelectBtn.addEventListener('click', () => fileInput.click());
 
     // File input change
-    fileInput.addEventListener('change', (e) => {
+    if (fileInput) fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
             handleFile(e.target.files[0]);
         }
     });
 
     // Drag and drop
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
+    if (uploadArea) {
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
 
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('dragover');
-    });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
 
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
 
-        if (e.dataTransfer.files.length > 0) {
-            handleFile(e.dataTransfer.files[0]);
-        }
-    });
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
 
-    // Click to upload
-    uploadArea.addEventListener('click', (event) => {
-        if (event.target !== fileSelectBtn) {
-            fileInput.click();
-        }
-    });
+        // Click to upload
+        uploadArea.addEventListener('click', (event) => {
+            if (event.target !== fileSelectBtn && fileInput) {
+                fileInput.click();
+            }
+        });
+    }
 
     // Prevent Enter key on config inputs from triggering form submission / Calculate button
     document.querySelectorAll('.config-grid input[type="number"]').forEach(input => {
@@ -96,16 +101,20 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Config inputs — update config values, show recalculate prompt if results are visible
+    // Same defensive rule as the upload block: these inputs are absent on demo.html
+    // and run-locally.html, and an unguarded bind aborts the rest of this handler.
     function onConfigChange() {
         if (resultsDisplayed) showRecalculateBanner();
     }
 
-    document.getElementById('licensesCost').addEventListener('change', (e) => {
+    const licensesCostEl = document.getElementById('licensesCost');
+    if (licensesCostEl) licensesCostEl.addEventListener('change', (e) => {
         config.licenseCost = parseFloat(e.target.value);
         onConfigChange();
     });
 
-    document.getElementById('professionalRate').addEventListener('change', (e) => {
+    const professionalRateEl = document.getElementById('professionalRate');
+    if (professionalRateEl) professionalRateEl.addEventListener('change', (e) => {
         config.professionalRate = parseFloat(e.target.value);
         onConfigChange();
     });
@@ -114,21 +123,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const minutesSlider = document.getElementById('minutesPerAction');
     const minutesOutput = document.getElementById('minutesValue');
 
-    minutesSlider.addEventListener('input', (e) => {
+    if (minutesSlider) minutesSlider.addEventListener('input', (e) => {
         const value = parseFloat(e.target.value);
-        minutesOutput.textContent = `${value} min`;
+        if (minutesOutput) minutesOutput.textContent = `${value} min`;
         config.minutesPerAction = value;
         onConfigChange();
     });
 
 
 
-    document.getElementById('intelligentRecapActions').addEventListener('change', (e) => {
+    const intelligentRecapEl = document.getElementById('intelligentRecapActions');
+    if (intelligentRecapEl) intelligentRecapEl.addEventListener('change', (e) => {
         config.intelligentRecapActions = parseInt(e.target.value) || 0;
         onConfigChange();
     });
 
-    document.getElementById('totalPurchasedLicenses').addEventListener('change', (e) => {
+    const totalPurchasedLicensesEl = document.getElementById('totalPurchasedLicenses');
+    if (totalPurchasedLicensesEl) totalPurchasedLicensesEl.addEventListener('change', (e) => {
         config.totalPurchasedLicenses = parseInt(e.target.value) || 0;
         onConfigChange();
     });
@@ -167,7 +178,11 @@ function handleFile(file) {
             if (window.InsightsShared) window.InsightsShared.saveSharedData(uploadedData, config);
             showFilePreview(file.name, uploadedData);
         } catch (error) {
-            showError('Error processing file: ' + error.message);
+            if (error && error.code === 'UNSUPPORTED_FORMAT') {
+                showUnsupportedFormatError(!!error.looksLikeHeatmap);
+            } else {
+                showError('Error processing file: ' + error.message);
+            }
         }
     };
     reader.onerror = () => {
@@ -200,7 +215,7 @@ function loadDemoReportInstant(csvText) {
         console.error('Error in instant demo render:', error);
         var container = document.querySelector('.container');
         if (container) {
-            container.innerHTML = '<div style="padding:3rem;text-align:center;color:#fff;"><h2>Unable to load demo</h2><p>' + (error && error.message ? error.message : 'Unknown error') + '</p><p><a href="index.html" style="color:#00D4FF;">Return to calculator</a></p></div>';
+            container.innerHTML = '<div class="error-box" style="padding:3rem;text-align:center;color:var(--text-primary);"><h2>Unable to load demo</h2><p>' + (error && error.message ? error.message : 'Unknown error') + '</p><p><a href="index.html" style="color:var(--accent);">Return to calculator</a></p></div>';
         }
     }
 }
@@ -220,8 +235,8 @@ async function loadDemoReport() {
             clarity('event', 'demo_report_loaded');
         }
 
-        // Fetch and parse demo data
-        const response = await fetch('demo-data.csv');
+        // Fetch and parse demo data (Viva Insights person query — 300 people, 7 orgs, 14 weeks)
+        const response = await fetch('viva-demo-data.csv');
         if (!response.ok) throw new Error('Failed to load demo data');
         const csvData = await response.text();
 
@@ -301,12 +316,11 @@ function showFilePreview(fileName, data) {
     }
 
     const previewHtml = `
-        <div style="background: var(--surface, #1E293B); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 16px; padding: 2rem; margin: 1.5rem 0; animation: fadeIn 0.4s ease;">
+        <div style="background: var(--ink-700); border: 1px solid var(--rule); border-radius: 10px; padding: 1.75rem 2rem; margin: 1.5rem 0; animation: fadeIn 0.4s ease;">
             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
-                <span style="font-size: 1.5rem;">✅</span>
                 <div>
-                    <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary, #F1F5F9);">${fileName}</div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary, #94A3B8);">File loaded successfully${data.detectedLocale && data.detectedLocale !== 'en-US' ? ' &middot; Detected locale: ' + data.detectedLocale + ' (normalized to en-US)' : ''}</div>
+                    <div style="font-weight: 600; font-size: 1.0625rem; color: var(--text-primary);">${fileName}</div>
+                    <div style="font-size: 0.8125rem; color: var(--text-tertiary);">File loaded successfully${data.detectedLocale && data.detectedLocale !== 'en-US' ? ' &middot; Detected locale: ' + data.detectedLocale + ' (normalized to en-US)' : ''}</div>
                 </div>
             </div>
 
@@ -328,12 +342,12 @@ function showFilePreview(fileName, data) {
             </div>
 
             <div style="display: flex; gap: 1rem; align-items: center;">
-                <button type="button" onclick="runCalculation()" style="flex: 1; padding: 1rem; font-size: 1.1rem; font-weight: 700; background: linear-gradient(135deg, #4A9EF7, #A855F7); color: #fff; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s ease; font-family: inherit;"
-                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 24px rgba(74,158,247,0.3)';"
-                    onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                <button type="button" onclick="runCalculation()" style="flex: 1; padding: 0.875rem 1rem; font-size: 0.9375rem; font-weight: 600; background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; transition: background-color 0.18s ease; font-family: inherit;"
+                    onmouseover="this.style.background='var(--accent-hover)';"
+                    onmouseout="this.style.background='';">
                     Calculate Productivity ROI
                 </button>
-                <button type="button" onclick="location.reload()" style="padding: 1rem 1.5rem; font-size: 0.9rem; font-weight: 600; background: transparent; color: var(--text-secondary, #94A3B8); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 10px; cursor: pointer; font-family: inherit;">
+                <button type="button" onclick="location.reload()" style="padding: 0.875rem 1.25rem; font-size: 0.875rem; font-weight: 500; background: transparent; color: var(--text-secondary); border: 1px solid var(--rule); border-radius: 8px; cursor: pointer; font-family: inherit;">
                     Reset
                 </button>
             </div>
@@ -422,7 +436,7 @@ function showRecalculateBanner() {
     if (document.getElementById('recalcBanner')) return; // already visible
     const banner = document.createElement('div');
     banner.id = 'recalcBanner';
-    banner.style.cssText = 'position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#4A9EF7,#A855F7);color:#fff;padding:0.75rem 1.5rem;border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;box-shadow:0 8px 32px rgba(74,158,247,0.35);display:flex;align-items:center;gap:0.75rem;font-family:inherit;animation:fadeIn 0.3s ease;';
+    banner.style.cssText = 'position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;background:var(--ink-600);color:var(--text-primary);border:1px solid var(--rule-strong);box-shadow:0 8px 32px var(--shadow);padding:0.75rem 1.5rem;border-radius:12px;font-weight:600;font-size:0.95rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;font-family:inherit;animation:fadeIn 0.3s ease;';
     banner.innerHTML = '⟳ Settings changed &mdash; <span style="text-decoration:underline;cursor:pointer;">Recalculate</span>';
     banner.addEventListener('click', () => {
         dismissRecalculateBanner();
@@ -469,25 +483,30 @@ function parseCSV(csvText) {
         return result;
     }
 
-    // Parse rows (aggregated formats)
-    const rows = [];
-    for (let i = 1; i < lines.length; i++) {
-        const values = parseCSVLine(lines[i]);
-        if (values.length === headers.length) {
-            const row = {};
-            headers.forEach((header, index) => {
-                row[header] = values[index];
-            });
-            rows.push(row);
-        }
-    }
+    // Everything else is rejected. The Viva Insights person query is the only export with
+    // one row per person per week, which the canonical Usage Threshold cohorts require.
+    // flattenData() below is retained but is no longer reachable from the upload path.
+    const err = new Error(UNSUPPORTED_FORMAT_TEXT);
+    err.code = 'UNSUPPORTED_FORMAT';
+    err.looksLikeHeatmap = looksLikeHeatmapExport(headers);
+    throw err;
+}
 
-    if (rows.length === 0) {
-        throw new Error('No valid data rows found in CSV');
-    }
+// Plain-text fallback used when the rich rejection UI is unavailable (e.g. demo.html).
+const UNSUPPORTED_FORMAT_TEXT = 'This file doesn\u2019t look like a Viva Insights person-query export, which is the only format the calculator accepts. Your CSV must contain PersonId, MetricDate and Total Copilot actions taken. See Step 1 for how to export it.';
 
-    // Flatten and normalize data
-    return flattenData(rows);
+// Recognize the retired Super Usage Report heatmap export so the rejection message can
+// name it explicitly instead of showing generic "unsupported file" guidance.
+function looksLikeHeatmapExport(headers) {
+    const set = new Set(headers.map(h => String(h).trim().toLowerCase()));
+    const signature = [
+        'organization (aggregated)', 'team/division name', 'enabled users', 'active users',
+        '% active users', 'average copilot actions', 'total actions', 'monthly actions', 'engagement %'
+    ];
+    const hits = signature.filter(c => set.has(c)).length;
+    // Wide heatmap exports name each column "YYYY-MM-DD <Metric>".
+    const wideDateCols = headers.filter(h => /^\d{4}-\d{2}-\d{2}\s+\S/.test(String(h).trim())).length;
+    return hits >= 2 || wideDateCols >= 2;
 }
 
 // Identify a Viva Insights per-person weekly export by the column signature.
@@ -785,7 +804,7 @@ function parseVivaInsights(lines, headers) {
             if (!base) { w.threshold = 'Non Users'; return; }
             let sum = 0, count = 0, nonZero = 0;
             for (let k = 0; k < 12; k++) {
-                const dt = new Date(base.getTime() - k * 7 * 86400000);
+                const dt = new Date(base.getFullYear(), base.getMonth(), base.getDate() - k * 7);
                 const key = toDateKey(dt);
                 if (Object.prototype.hasOwnProperty.call(byDate, key)) {
                     const a = byDate[key];
@@ -1145,7 +1164,7 @@ function buildTierTableBodyHTML(cohorts, sortedTeams, metrics, licenseCost) {
 function buildTierAccuracyBanner(uploadedData) {
     if (uploadedData && uploadedData.isVivaInsights) return ''; // real cohorts available — no banner needed
     return `<div style="background: rgba(245, 158, 11, 0.1); border: 1px solid var(--copilot-orange, #F59E0B); border-radius: 8px; padding: 0.75rem 1rem; margin: 0 0 1rem; font-size: 0.85rem; color: var(--text-secondary);">
-        <strong style="color: var(--copilot-orange, #F59E0B);">⚠️ Approximate cohorts</strong> &mdash;
+        <strong style="color: var(--warn);">Approximate cohorts</strong> &mdash;
         your upload is aggregated by ${uploadedData && uploadedData.groupLabel ? uploadedData.groupLabel.toLowerCase() : 'group'},
         so we cannot identify individual users. Tiers below are computed by grouping
         ${uploadedData && uploadedData.groupLabel ? uploadedData.groupLabel.toLowerCase() : 'groups'} by their average
@@ -1943,7 +1962,7 @@ function buildProjectionTables(metrics, sortedTeams) {
                 ${tierCohorts
                     ? `Real per-user Usage Threshold cohorts based on ${Object.keys(uploadedData.personIndex).length.toLocaleString()} distinct users. Investment at $${licenseCost}/user/month.`
                     : `${uploadedData.groupLabel || 'Teams'} segmented into performance tiers by Copilot actions per user. Investment at $${licenseCost}/user/month.`}<br>
-                <a href="https://jordankingisalive.github.io/CopilotROICalculator/Start%20Here.html" target="_blank" style="color: var(--copilot-cyan); font-weight: 600; text-decoration: none;">🚀 Explore the Adoption Journey to move users up tiers →</a>
+                <a href="https://jordankingisalive.github.io/CopilotROICalculator/Start%20Here.html" target="_blank" style="color: var(--accent); font-weight: 500; text-decoration: none;">Explore the Adoption Journey to move users up tiers &rarr;</a>
             </p>
             ${uploadedData.sortedDates && uploadedData.sortedDates.length > 4 ? `<div class="time-toggle-bar" style="display:flex; justify-content:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
                 <button class="time-toggle-btn active" data-period="all" onclick="switchTimePeriod('all')">Entire Period</button>
@@ -2179,21 +2198,18 @@ function buildMpaToggleButtons() {
         const isActive = config.minutesPerAction === val && !isCustom;
         const isDefault = val === originalMinutesPerAction;
         const label = `${val} min` + (isDefault ? ' (your default)' : '');
-        const activeStyle = isActive
-            ? 'background: linear-gradient(135deg, #4A9EF7, #A855F7); color: #fff; border-color: transparent; font-weight: 700;'
-            : 'background: var(--surface, #1E293B); color: var(--text-secondary); border-color: var(--border, rgba(255,255,255,0.08));';
-        return `<button onclick="switchMinutesPerAction(${val})" style="padding:0.5rem 1.25rem; border-radius:8px; border:1px solid; cursor:pointer; font-size:0.9rem; font-family:inherit; transition:all 0.2s; ${activeStyle}">${label}</button>`;
+        return `<button class="time-toggle-btn${isActive ? ' active' : ''}" onclick="switchMinutesPerAction(${val})">${label}</button>`;
     }).join('');
 
     const customActiveStyle = isCustom
-        ? 'border-color: var(--copilot-blue); background: rgba(74,158,247,0.15); color: var(--copilot-cyan); font-weight: 700;'
-        : 'border-color: var(--border, rgba(255,255,255,0.08)); background: var(--surface, #1E293B); color: var(--text-secondary);';
+        ? 'border-color: var(--accent-line); background: var(--accent-soft); color: var(--text-primary);'
+        : 'border-color: var(--rule); background: transparent; color: var(--text-secondary);';
 
-    const customBox = `<span style="display:inline-flex; align-items:center; gap:0.4rem; padding:0.35rem 0.75rem; border-radius:8px; border:1px solid; font-size:0.9rem; ${customActiveStyle}">
+    const customBox = `<span style="display:inline-flex; align-items:center; gap:0.4rem; padding:0.25rem 0.5rem; border-radius:6px; border:1px solid; font-size:0.8125rem; ${customActiveStyle}">
         <input type="number" id="mpaCustomInput" min="1" max="30" step="0.5" value="${isCustom ? config.minutesPerAction : ''}" placeholder="—"
-            style="width:3rem; padding:0.2rem 0.3rem; border-radius:4px; border:1px solid var(--border, rgba(255,255,255,0.08)); background:var(--surface-raised, #253449); color:var(--text-primary, #F1F5F9); font-size:0.9rem; font-family:inherit; text-align:center;"
+            style="width:3rem; padding:0.2rem 0.3rem; border-radius:4px; border:1px solid var(--rule); background:var(--ink-700); color:var(--text-primary); font-size:0.8125rem; font-family:var(--font-mono); text-align:center;"
             onkeydown="if(event.key==='Enter'){applyCustomMpa();}"
-        > min <button onclick="applyCustomMpa()" style="padding:0.2rem 0.6rem; border-radius:6px; border:1px solid var(--copilot-blue); background:var(--copilot-blue); color:#fff; font-size:0.75rem; font-weight:600; cursor:pointer; font-family:inherit;">Go</button>
+        > min <button onclick="applyCustomMpa()" style="padding:0.2rem 0.6rem; border-radius:4px; border:1px solid var(--accent); background:var(--accent); color:#fff; font-size:0.75rem; font-weight:600; cursor:pointer; font-family:inherit;">Go</button>
     </span>`;
 
     return buttons + customBox;
@@ -2226,12 +2242,9 @@ function switchReportTab(tabId) {
         target.style.display = 'block';
         target.style.animation = 'fadeIn 0.3s ease';
     }
-    // Update tab button styles
+    // Update tab button styles (the .active class drives all styling in styles.css)
     document.querySelectorAll('.report-tab').forEach(btn => {
         const isActive = btn.dataset.tab === tabId;
-        btn.style.borderBottomColor = isActive ? 'var(--copilot-blue)' : 'transparent';
-        btn.style.background = isActive ? 'var(--surface-raised, #253449)' : 'var(--surface, #1E293B)';
-        btn.style.color = isActive ? 'var(--text-primary, #F1F5F9)' : 'var(--text-secondary, #94A3B8)';
         btn.classList.toggle('active', isActive);
     });
 }
@@ -2338,29 +2351,26 @@ function renderResults() {
         <div class="results-container">
             ${isDemoData ? `
             <!-- DEMO DATA WARNING BANNER -->
-            <div style="background: linear-gradient(135deg, #F59E0B, #EF4444); border: 3px solid #DC2626; border-radius: 12px; padding: 1.5rem; margin: 0 0 1.5rem; box-shadow: 0 8px 32px rgba(239, 68, 68, 0.4);">
-                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
-                    <span style="font-size: 2.5rem;">⚠️</span>
-                    <div>
-                        <h2 style="margin: 0; font-size: 1.4rem; color: #FFFFFF; font-weight: 800;">DEMO DATA ACTIVE</h2>
-                        <p style="margin: 0.25rem 0 0; font-size: 0.95rem; color: #FEF3C7; font-weight: 600;">You are viewing example data from a demonstration dataset</p>
-                    </div>
+            <div style="background: var(--ink-700); border: 1px solid var(--rule); border-left: 2px solid var(--negative); border-radius: 10px; padding: 1.5rem; margin: 0 0 1.5rem;">
+                <div style="margin-bottom: 1rem;">
+                    <h2 style="margin: 0; font-size: 1.125rem; color: var(--negative);">DEMO DATA ACTIVE</h2>
+                    <p style="margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--text-secondary);">You are viewing example data from a demonstration dataset</p>
                 </div>
-                <div style="background: rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
-                    <p style="margin: 0 0 0.75rem; font-size: 0.95rem; color: #FFFFFF; font-weight: 600;">⛔ DO NOT use this data for:</p>
-                    <ul style="margin: 0; padding-left: 1.5rem; color: #FEF3C7; font-size: 0.9rem; line-height: 1.6;">
+                <div style="background: var(--ink-800); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+                    <p style="margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--text-primary); font-weight: 600;">DO NOT use this data for:</p>
+                    <ul style="margin: 0; padding-left: 1.25rem; color: var(--text-secondary); font-size: 0.875rem; line-height: 1.65;">
                         <li>Customer presentations or stakeholder briefings</li>
                         <li>Business decisions or ROI justifications</li>
                         <li>Sharing outside your organization</li>
                     </ul>
-                    <p style="margin: 1rem 0 0; font-size: 0.95rem; color: #FFFFFF; font-weight: 600;">✅ To generate a report with YOUR data: Return to the home screen to upload your organization's Copilot usage CSV file</p>
+                    <p style="margin: 1rem 0 0; font-size: 0.875rem; color: var(--text-secondary);">To generate a report with YOUR data: Return to the home screen to upload your organization's Copilot usage CSV file</p>
                 </div>
             </div>
             ` : ''}
             <header>
                 <h1>M365 Copilot Productivity ROI Analysis Results</h1>
                 <p class="subtitle">Based on ${rows.length} ${uploadedData.groupLabel || 'teams'} • ${config.analysisWeeks} weeks of data${uploadedData.dateRange ? ` (${uploadedData.dateRange})` : ''}</p>
-                <p style="margin-top: 0.5rem;"><a href="https://aka.ms/Analytics-Hub" target="_blank" style="color: var(--copilot-cyan); font-weight: 600; text-decoration: none; font-size: 0.95rem;">📊 View more reports on the Analytics Hub →</a></p>
+                <p style="margin-top: 0.5rem;"><a href="https://aka.ms/Analytics-Hub" target="_blank" style="color: var(--accent); font-weight: 500; text-decoration: none; font-size: 0.875rem;">View more reports on the Analytics Hub &rarr;</a></p>
             </header>
 
             <!-- Minutes per Action Toggle -->
@@ -2370,45 +2380,42 @@ function renderResults() {
             </div>
 
             <!-- TAB BAR -->
-            <div class="report-tabs" style="display:flex; gap:0; margin:1.5rem 0 0; border-bottom:3px solid var(--border, rgba(255,255,255,0.08)); flex-wrap:wrap;">
-                <button class="report-tab active" data-tab="summary"   onclick="switchReportTab('summary')"   style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid var(--copilot-blue); background:var(--surface-raised, #253449); color:var(--text-primary, #F1F5F9); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128202; Executive Summary</button>
-                <button class="report-tab"        data-tab="adoption"  onclick="switchReportTab('adoption')"  style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128200; Adoption Insights</button>
-                <button class="report-tab"        data-tab="orgs"      onclick="switchReportTab('orgs')"      style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#127970; Organizations</button>
-                <button class="report-tab"        data-tab="apps"      onclick="switchReportTab('apps')"      style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#129513; Apps &amp; Behavior</button>
-                <button class="report-tab"        data-tab="risk"      onclick="switchReportTab('risk')"      style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128680; Risk &amp; Waste</button>
-                <button class="report-tab"        data-tab="roi"       onclick="switchReportTab('roi')"       style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128176; ROI &amp; Forecast</button>
-                <button class="report-tab"        data-tab="reference" onclick="switchReportTab('reference')" style="flex:1; padding:1rem 0.5rem; font-size:0.95rem; font-weight:700; font-family:inherit; border:none; border-bottom:4px solid transparent; background:var(--surface, #1E293B); color:var(--text-secondary, #94A3B8); cursor:pointer; border-radius:12px 12px 0 0; transition:all 0.2s; white-space:nowrap;">&#128214; Reference</button>
+            <div class="report-tabs">
+                <button class="report-tab active" data-tab="summary"   onclick="switchReportTab('summary')">Executive Summary</button>
+                <button class="report-tab"        data-tab="orgs"      onclick="switchReportTab('orgs')">Organizations</button>
+                <button class="report-tab"        data-tab="roi"       onclick="switchReportTab('roi')">ROI &amp; Forecast</button>
+                <button class="report-tab"        data-tab="reference" onclick="switchReportTab('reference')">Reference</button>
             </div>
 
             <!-- TAB: Executive Summary -->
             <div class="report-tab-content" id="tab-summary" style="display:block; animation: fadeIn 0.3s ease;">
 
             <!-- Executive Summary -->
-            <div style="background: linear-gradient(135deg, rgba(74,158,247,0.08), rgba(0,212,255,0.08)); border: 1px solid rgba(74,158,247,0.3); border-radius: 12px; padding: 1.25rem 1.5rem; margin: 1.5rem 0 1.5rem; text-align: center;">
-                <p style="font-size: 1.05rem; color: var(--text-primary); margin: 0; line-height: 1.6;">
-                    Your <strong style="color: var(--copilot-cyan);">${metrics.totalEnabledUsers.toLocaleString()}</strong> Copilot licenses generate
-                    <strong style="color: var(--green);">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}/month</strong> in productivity value —
-                    a <strong style="color: var(--green);">${metrics.roiMultiple.toFixed(1)}x return</strong> on investment at
-                    <strong style="color: var(--copilot-cyan);">${metrics.activationRate.toFixed(0)}% adoption</strong>${trendSummary}.
+            <div style="background: var(--ink-700); border: 1px solid var(--rule); border-left: 2px solid var(--accent); border-radius: 10px; padding: 1.25rem 1.5rem; margin: 1.5rem 0 1.5rem;">
+                <p style="font-size: 1rem; color: var(--text-secondary); margin: 0; line-height: 1.65;">
+                    Your <strong>${metrics.totalEnabledUsers.toLocaleString()}</strong> Copilot licenses generate
+                    <strong class="is-value">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}/month</strong> in productivity value &mdash;
+                    a <strong>${metrics.roiMultiple.toFixed(1)}x return</strong> on investment at
+                    <strong>${metrics.activationRate.toFixed(0)}% adoption</strong>${trendSummary}.
                 </p>
             </div>
 
             ${showRecap ? `
             <!-- Intelligent Recap Toggle -->
-            <div class="recap-toggle-container" id="recapToggleContainer" style="display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 1rem; background: var(--surface, #1E293B); border-radius: 8px; margin: 1.5rem 0; border: 2px solid var(--copilot-blue);">
-                <span class="recap-toggle-label" style="font-weight: 600; color: var(--text-primary, #F1F5F9); font-size: 1rem;">Include Intelligent Recap in ROI:</span>
-                <label class="toggle-switch" style="position: relative; display: inline-block; width: 60px; height: 30px;">
-                    <input type="checkbox" id="recapToggleData" checked onchange="toggleRecapDisplayData()" style="opacity: 0; width: 0; height: 0;">
-                    <span class="toggle-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--copilot-blue); transition: 0.4s; border-radius: 30px;"></span>
+            <div class="recap-toggle-container" id="recapToggleContainer">
+                <span class="recap-toggle-label">Include Intelligent Recap in ROI:</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="recapToggleData" checked onchange="toggleRecapDisplayData()">
+                    <span class="toggle-slider"></span>
                 </label>
-                <span class="recap-toggle-label" id="recapToggleStatusData" style="font-weight: 600; color: var(--copilot-cyan); font-size: 1rem;">Included</span>
+                <span class="recap-toggle-label" id="recapToggleStatusData">Included</span>
             </div>
 
             <!-- Intelligent Recap Value Display -->
-            <div class="recap-value-box" id="recapValueBoxData" style="background: var(--surface-raised, #253449); border: 2px solid var(--copilot-cyan); border-radius: 12px; padding: 1.5rem; margin: 1rem 0; text-align: center;">
-                <h4 style="color: var(--copilot-cyan); margin-bottom: 0.5rem; font-size: 0.95rem;">💡 Intelligent Recap Additional Value</h4>
-                <div class="value" style="font-size: 2rem; font-weight: bold; color: var(--text-primary, #F1F5F9);">$${recapMonthlyValue.toLocaleString(undefined, {maximumFractionDigits: 2})}/mo</div>
-                <small style="color: var(--text-secondary, #94A3B8);">${config.intelligentRecapActions.toLocaleString(undefined, {maximumFractionDigits: 2})} actions × 0.5 hours each = ${recapHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 2})} hours/mo</small>
+            <div class="recap-value-box" id="recapValueBoxData">
+                <h4>Intelligent Recap Additional Value</h4>
+                <div class="value">$${recapMonthlyValue.toLocaleString(undefined, {maximumFractionDigits: 2})}/mo</div>
+                <small style="color: var(--text-tertiary);">${config.intelligentRecapActions.toLocaleString(undefined, {maximumFractionDigits: 2})} actions × 0.5 hours each = ${recapHoursSaved.toLocaleString(undefined, {maximumFractionDigits: 2})} hours/mo</small>
             </div>
             ` : ''}
 
@@ -2422,14 +2429,14 @@ function renderResults() {
             </div>` : ''}
             <!-- Hero Metrics Row -->
             <div class="metrics-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 1.5rem;">
-                <div class="metric-card" style="border: 2px solid var(--green); background: linear-gradient(135deg, rgba(34,197,94,0.05), rgba(34,197,94,0.02));">
+                <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Monthly ROI Multiple ${tip('Monthly productivity value ÷ monthly license cost. A 3x ROI means every $1 spent on licenses generates $3 in productivity value.')}</span></div>
-                    <div class="metric-value" id="km-roi" style="font-size: 3rem; color: var(--green);">${metrics.roiMultiple.toFixed(1)}x</div>
+                    <div class="metric-value" id="km-roi">${metrics.roiMultiple.toFixed(1)}x</div>
                     <div class="metric-sublabel" id="km-roiSub">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo value ÷ $${metrics.monthlyCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo cost</div>
                 </div>
-                <div class="metric-card" style="border: 2px solid var(--copilot-cyan); background: linear-gradient(135deg, rgba(0,212,255,0.05), rgba(0,212,255,0.02));">
+                <div class="metric-card">
                     <div class="metric-label"><span class="metric-label-row">Monthly Productivity Value ${tip('The total dollar value Copilot generates each month. Calculated as: total monthly actions × minutes per action ÷ 60 × hourly rate.')}</span></div>
-                    <div class="metric-value" id="km-monthlyValue" style="font-size: 3rem; color: var(--copilot-cyan);">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
+                    <div class="metric-value is-value" id="km-monthlyValue">$${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
                     <div class="metric-sublabel" id="km-monthlyValueSub">$${(metrics.valuePerMonth * 12).toLocaleString(undefined, {maximumFractionDigits: 0})}/year • $${(metrics.valuePerMonth / 4.33).toLocaleString(undefined, {maximumFractionDigits: 0})}/week</div>
                 </div>
             </div>
@@ -2480,7 +2487,7 @@ function renderResults() {
             <div style="margin-top: 1.25rem; padding: 1rem 1.25rem; background: var(--surface-raised, #253449); border-radius: 10px; border-left: 3px solid var(--copilot-blue);">
                 <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.7;">
                     <strong style="color: var(--text-primary);">Total Investment:</strong> $${metrics.monthlyCostPurchased.toLocaleString(undefined, {maximumFractionDigits: 0})}/month ($${metrics.annualCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/year) for ${metrics.totalPurchasedLicenses.toLocaleString(undefined, {maximumFractionDigits: 0})} purchased licenses at $${config.licenseCost}/user/month
-                    ${metrics.unassignedLicenses > 0 ? `<br><strong style="color: var(--copilot-orange);">💡 Quick Win:</strong> ${metrics.unassignedLicenses.toLocaleString(undefined, {maximumFractionDigits: 0})} licenses available to assign — $${metrics.wastedLicenseCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo in untapped potential` : ''}<br>
+                    ${metrics.unassignedLicenses > 0 ? `<br><strong style="color: var(--warn);">Quick Win:</strong> ${metrics.unassignedLicenses.toLocaleString(undefined, {maximumFractionDigits: 0})} licenses available to assign — $${metrics.wastedLicenseCost.toLocaleString(undefined, {maximumFractionDigits: 0})}/mo in untapped potential` : ''}<br>
                     <strong style="color: var(--text-primary);">Productivity Value Calculation:</strong> ${metrics.totalMonthlyActions.toLocaleString(undefined, {maximumFractionDigits: 0})} monthly actions × ${metrics.minsPerAction} min ÷ 60 × $${config.professionalRate}/hr = $${metrics.valuePerMonth.toLocaleString(undefined, {maximumFractionDigits: 0})}/month
                 </p>
             </div>
@@ -2534,13 +2541,6 @@ function renderResults() {
             `) : ''}
 
             </div><!-- end TAB: Executive Summary -->
-
-            <!-- TAB: Adoption Insights -->
-            <div class="report-tab-content" id="tab-adoption" style="display:none;">
-                <div class="insights-host" data-tab-host="adoption">
-                    <p style="color:var(--text-secondary, #94A3B8); padding:2rem; text-align:center;">Loading adoption insights&hellip;</p>
-                </div>
-            </div><!-- end TAB: Adoption Insights -->
 
             <!-- TAB: Organizations (was Team Performance) -->
             <div class="report-tab-content" id="tab-orgs" style="display:none;">
@@ -2675,20 +2675,6 @@ function renderResults() {
 
             </div><!-- end TAB: Organizations -->
 
-            <!-- TAB: Apps and Behavior -->
-            <div class="report-tab-content" id="tab-apps" style="display:none;">
-                <div class="insights-host" data-tab-host="apps">
-                    <p style="color:var(--text-secondary, #94A3B8); padding:2rem; text-align:center;">Loading app attribution&hellip;</p>
-                </div>
-            </div><!-- end TAB: Apps and Behavior -->
-
-            <!-- TAB: Risk and Waste -->
-            <div class="report-tab-content" id="tab-risk" style="display:none;">
-                <div class="insights-host" data-tab-host="risk">
-                    <p style="color:var(--text-secondary, #94A3B8); padding:2rem; text-align:center;">Loading risk analysis&hellip;</p>
-                </div>
-            </div><!-- end TAB: Risk and Waste -->
-
             <!-- TAB: ROI Analysis -->
             <div class="report-tab-content" id="tab-roi" style="display:none;">
 
@@ -2741,7 +2727,7 @@ function renderResults() {
                     <tr><td><strong>Power User Rate</strong></td><td>The percentage of all licensed users classified as Power Users.</td></tr>
                     <tr><td><strong>Super Usage Report</strong></td><td>A Power BI report (<a href="https://aka.ms/decodingsuperusage" target="_blank" style="color:var(--copilot-cyan);">aka.ms/decodingsuperusage</a>) that provides a heatmap view of Copilot usage across your organization, broken out by team/division.</td></tr>
                     <tr><td><strong>Trend Badge (vs Prior 4wk)</strong></td><td>A percentage change indicator comparing the most recent 4 weeks of data against the preceding 4 weeks. Green ↑ means improvement; red ↓ means decline. Appears on Key Metrics when time-period data is available.</td></tr>
-                    <tr><td><strong>Usage Tier</strong></td><td>A percentile band (Top 10%, 75-90%, etc.) that groups teams by their average Copilot actions per user, helping identify champions and teams that need enablement.</td></tr>
+                    <tr><td><strong>Usage Tier</strong></td><td>The Usage Threshold cohort a person falls into, based on their 12-week rolling average of weekly Copilot actions and the 9-of-12-weeks habit rule: Power Users, Habitual Users, Novice Users, Low Users, Non-users.</td></tr>
                     <tr><td><strong>Unassigned License Cost</strong></td><td>The monthly cost of licenses purchased but not yet assigned to users. These represent ready-to-deploy seats — assigning them brings immediate value, or right-sizing at renewal frees up budget for other priorities.</td></tr>
                     <tr><td><strong>Weekly Actions per User</strong></td><td>The average number of Copilot actions each active user performs per week — things like accepting a suggestion, using Copilot chat, or generating a summary.</td></tr>
                     <tr><td><strong>Weekly Hours Saved</strong></td><td>The estimated total time saved per week across all users, calculated as total weekly actions × minutes per action ÷ 60.</td></tr>
@@ -2767,9 +2753,9 @@ function renderResults() {
             </div><!-- end TAB: Reference -->
 
             <div style="text-align: center; margin-top: 2rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
-                <button class="btn-primary" onclick="exportToDocx()" style="background: linear-gradient(135deg, #4A9EF7, #A855F7);">Export to DOCX</button>
-                <button class="btn-primary" onclick="exportToPptx()" style="background: linear-gradient(135deg, #A855F7, #EC4899);">Export to PPTX</button>
-                <button class="btn-primary" onclick="exportExecutiveDeck()" style="background: linear-gradient(135deg, #10B981, #0078D4);">Executive Deck</button>
+                <button class="btn-primary" onclick="exportToDocx()">Export to DOCX</button>
+                <button class="btn-primary" onclick="exportToPptx()">Export to PPTX</button>
+                <button class="btn-primary" onclick="exportExecutiveDeck()">Executive Deck</button>
                 <button class="btn-primary" onclick="location.reload()">Analyze Another File</button>
             </div>
         </div>
@@ -2781,29 +2767,7 @@ function renderResults() {
     resultsDisplayed = true;
 
     // Populate the 5 ported in-report analytics tabs from shared session data
-    if (window.InsightsTabs && window.InsightsShared) {
-        try {
-            const _sharedData = window.InsightsShared.loadSharedData();
-            if (_sharedData) {
-                const _tabMap = {
-                    adoption: window.InsightsTabs.renderAdoption,
-                    orgs:     window.InsightsTabs.renderOrgs,
-                    apps:     window.InsightsTabs.renderApps,
-                    risk:     window.InsightsTabs.renderAtRisk,
-                    forecast: window.InsightsTabs.renderForecast
-                };
-                Object.entries(_tabMap).forEach(([_k, _fn]) => {
-                    const _host = document.querySelector('.insights-host[data-tab-host="' + _k + '"]');
-                    if (_host && _fn) {
-                        try { _fn(_host, _sharedData); }
-                        catch (e) { console.warn('[InsightsTabs] ' + _k + ' render failed', e); }
-                    }
-                });
-            }
-        } catch (e) {
-            console.warn('[InsightsTabs] population failed', e);
-        }
-    }
+    populateInsightsHosts();
 
     // Initialize table sorting after rendering
     initTableSorting();
@@ -2813,6 +2777,33 @@ function renderResults() {
         switchTimePeriod('all');
     }
 }
+
+function populateInsightsHosts() {
+    if (!window.InsightsTabs || !window.InsightsShared) return;
+    try {
+        const _sharedData = window.InsightsShared.loadSharedData();
+        if (_sharedData) {
+            const _tabMap = {
+                orgs:     window.InsightsTabs.renderOrgs,
+                forecast: window.InsightsTabs.renderForecast
+            };
+            Object.entries(_tabMap).forEach(([_k, _fn]) => {
+                const _host = document.querySelector('.insights-host[data-tab-host="' + _k + '"]');
+                if (_host && _fn) {
+                    try { _fn(_host, _sharedData); }
+                    catch (e) { console.warn('[InsightsTabs] ' + _k + ' render failed', e); }
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('[InsightsTabs] population failed', e);
+    }
+}
+
+// Chart SVG bakes resolved colours, so a theme switch has to re-render them.
+document.addEventListener('cri:themechange', () => {
+    if (resultsDisplayed) populateInsightsHosts();
+});
 
 // Shared: prepare the container for capture (open sections, hide buttons, fix gradients)
 function prepareForCapture(container) {
@@ -2840,8 +2831,8 @@ function prepareForCapture(container) {
         el.style.background = 'none';
         el.style.webkitBackgroundClip = 'unset';
         el.style.backgroundClip = 'unset';
-        el.style.webkitTextFillColor = '#00D4FF';
-        el.style.color = '#00D4FF';
+        el.style.webkitTextFillColor = 'var(--accent)';
+        el.style.color = 'var(--accent)';
     });
 
     return { closedDetails, hideEls, origStyle, gradientEls, hiddenTabs, tabBar };
@@ -2857,11 +2848,23 @@ function restoreAfterCapture(container, state) {
     if (state.tabBar) state.tabBar.style.display = state.tabBar.dataset.prevDisplay || '';
 }
 
+// Exported PNG/PDF/PPTX canvases must match the theme the user is looking at,
+// otherwise a light-theme report is composited onto a dark plate.
+function exportCanvasColor() {
+    try {
+        const root = getComputedStyle(document.documentElement).getPropertyValue('--ink-900').trim();
+        if (root) return root;
+        const body = getComputedStyle(document.body).backgroundColor;
+        if (body && body !== 'rgba(0, 0, 0, 0)' && body !== 'transparent') return body;
+    } catch (e) {}
+    return '#0B1120';
+}
+
 // Capture all visible sections as PNG image data arrays
 async function captureSections(container, progressCb) {
     const isVisible = (el) => el.offsetHeight > 0 && getComputedStyle(el).display !== 'none';
     const sections = Array.from(container.children).filter(isVisible);
-    const h2cOpts = { scale: 2, useCORS: true, backgroundColor: '#0B1120', logging: false, windowWidth: 1120 };
+    const h2cOpts = { scale: 2, useCORS: true, backgroundColor: exportCanvasColor(), logging: false, windowWidth: 1120 };
     const images = [];
     for (let i = 0; i < sections.length; i++) {
         if (progressCb) progressCb(i, sections.length);
@@ -4546,6 +4549,31 @@ function showError(message) {
     if (em) em.textContent = message;
 }
 
+// Rejection UI for a CSV that is not a Viva Insights person query. The markup is entirely
+// author-written — nothing from the uploaded file is interpolated — so there is no injection
+// surface. Unlike showError(), the instructions section stays visible so the Step 1 link works.
+function showUnsupportedFormatError(looksLikeHeatmap) {
+    const ls = document.getElementById('loadingState');
+    if (ls) ls.style.display = 'none';
+    const es = document.getElementById('errorState');
+    const em = document.getElementById('errorMessage');
+    if (!es || !em) { showError(UNSUPPORTED_FORMAT_TEXT); return; }
+
+    const heatmapNote = looksLikeHeatmap
+        ? '<p style="margin:0 0 0.75rem;"><strong>This looks like a Super Usage Report heatmap export, which is no longer supported.</strong> Re-export from Viva Insights using a Person query.</p>'
+        : '';
+
+    em.innerHTML =
+        heatmapNote +
+        '<p style="margin:0 0 0.75rem;">This file doesn&rsquo;t look like a <strong>Viva Insights person-query export</strong>, which is the only format the calculator accepts.</p>' +
+        '<p style="margin:0 0 0.5rem;">Your CSV must contain these columns:</p>' +
+        '<ul style="margin:0 0 0.75rem 1.25rem;"><li><code>PersonId</code></li><li><code>MetricDate</code></li><li><code>Total Copilot actions taken</code></li></ul>' +
+        '<p style="margin:0;">Follow <a href="#step-export-data">Step 1 &mdash; Export Your Viva Insights Data</a> for the exact query settings.</p>';
+
+    es.style.display = 'block';
+    try { es.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+}
+
 // Toggle Intelligent Recap display for Data Analysis
 function toggleRecapDisplayData() {
     const toggle = document.getElementById('recapToggleData');
@@ -4585,7 +4613,7 @@ async function downloadLocalPackage(event) {
     const originalHTML = btn?.innerHTML;
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<span class="action-icon">⏳</span><span class="action-text">Creating ZIP...</span>';
+        btn.innerHTML = '<span class="action-text">Creating ZIP…</span>';
     }
 
     try {
@@ -4599,12 +4627,42 @@ async function downloadLocalPackage(event) {
             'styles.css',
             'script.js',
             'sales-script.js',
+            'insights-shared.js',
+            'insights-tabs.js',
+            'header-mapping.js',
             'sample-data.csv',
             'lib/html2canvas.min.js',
             'lib/jspdf.umd.min.js',
             'lib/pptxgen.bundle.js',
             'lib/docx.umd.js',
-            'lib/jszip.min.js'
+            'lib/jszip.min.js',
+            'lib/html2pdf.bundle.min.js',
+            // Vendored typography — without these the offline copy falls back to system fonts.
+            'assets/fonts/fonts.css',
+            'assets/fonts/IBMPlexMono--F63fjptAgt5VM-kVkqdyU8n1i8q1w.woff2',
+            'assets/fonts/IBMPlexMono--F63fjptAgt5VM-kVkqdyU8n1iAq129k.woff2',
+            'assets/fonts/IBMPlexMono--F63fjptAgt5VM-kVkqdyU8n1iEq129k.woff2',
+            'assets/fonts/IBMPlexMono--F63fjptAgt5VM-kVkqdyU8n1iIq129k.woff2',
+            'assets/fonts/IBMPlexMono--F63fjptAgt5VM-kVkqdyU8n1isq129k.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3twJwl1FgtIU.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3twJwl5FgtIU.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3twJwl9FgtIU.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3twJwlBFgg.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3twJwlRFgtIU.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3vAOwl1FgtIU.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3vAOwl5FgtIU.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3vAOwl9FgtIU.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3vAOwlBFgg.woff2',
+            'assets/fonts/IBMPlexMono--F6qfjptAgt5VM-kVkqdyU8n3vAOwlRFgtIU.woff2',
+            'assets/fonts/IBMPlexSans-zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxaKYbABA.woff2',
+            'assets/fonts/IBMPlexSans-zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxdKYbABA.woff2',
+            'assets/fonts/IBMPlexSans-zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2',
+            'assets/fonts/IBMPlexSans-zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxQKYbABA.woff2',
+            'assets/fonts/IBMPlexSans-zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxRKYbABA.woff2',
+            'assets/fonts/IBMPlexSans-zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxTKYbABA.woff2',
+            'assets/fonts/Newsreader-cY9VfjOCX1hbuyalUrK49dLac06G1ZGsZBtoBAbCJYQraA.woff2',
+            'assets/fonts/Newsreader-cY9VfjOCX1hbuyalUrK49dLac06G1ZGsZBtoBAbDJYQraA.woff2',
+            'assets/fonts/Newsreader-cY9VfjOCX1hbuyalUrK49dLac06G1ZGsZBtoBAbNJYQ.woff2'
         ];
 
         // Fetch and add all files to ZIP
@@ -4675,7 +4733,7 @@ Visit: https://jordankingisalive.github.io/CopilotROICalculator/
 
         // Reset button
         if (btn) {
-            btn.innerHTML = '<span class="action-icon">✅</span><span class="action-text">Downloaded!</span>';
+            btn.innerHTML = '<span class="action-text">Downloaded</span>';
             setTimeout(() => {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;

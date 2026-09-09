@@ -24,6 +24,9 @@
     }
     const IS = window.InsightsShared;
     const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    // SVG presentation attributes need a resolved colour, not a var() reference.
+    // Inline style= strings keep using var() directly so they re-skin with CSS.
+    const ink = (token, fallback) => IS.cssVar(token, fallback);
 
     // Inject all the per-view CSS once. Standalone pages also include it inline
     // (no harm — last definition wins, all match). This lets the in-report tabs
@@ -41,20 +44,20 @@
         .insights-host .chart-wrapper { overflow-x: auto; }
         /* Adoption — migration matrix */
         .migration-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        .migration-table th, .migration-table td { padding: 0.5rem 0.75rem; text-align: center; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.05); }
+        .migration-table th, .migration-table td { padding: 0.5rem 0.75rem; text-align: center; font-size: 0.85rem; border: 1px solid var(--rule); }
         .migration-table th { background: var(--surface-raised, #253449); color: var(--text-secondary, #94A3B8); font-weight: 600; }
         .migration-table td.row-label { text-align: left; font-weight: 600; color: var(--text-primary, #F1F5F9); background: var(--surface-raised, #253449); }
-        .migration-table td.diagonal { background: rgba(255,255,255,0.04); }
-        .migration-table td.up { color: #10b981; font-weight: 600; }
-        .migration-table td.down { color: #ef4444; font-weight: 600; }
+        .migration-table td.diagonal { background: var(--light-gray); }
+        .migration-table td.up { color: var(--positive); font-weight: 600; }
+        .migration-table td.down { color: var(--negative); font-weight: 600; }
         /* Organizations */
         .insights-host .org-table { width: 100%; border-collapse: collapse; }
-        .insights-host .org-table th { padding: 0.75rem 1rem; text-align: left; background: var(--surface-raised, #253449); color: var(--text-secondary, #94A3B8); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .insights-host .org-table td { padding: 0.85rem 1rem; color: var(--text-primary, #F1F5F9); font-size: 0.95rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .insights-host .org-table th { padding: 0.75rem 1rem; text-align: left; background: var(--surface-raised, #253449); color: var(--text-secondary, #94A3B8); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--rule); }
+        .insights-host .org-table td { padding: 0.85rem 1rem; color: var(--text-primary, #F1F5F9); font-size: 0.95rem; border-bottom: 1px solid var(--rule); }
         .insights-host .org-table tr.expandable { cursor: pointer; transition: background 0.15s; }
-        .insights-host .org-table tr.expandable:hover { background: rgba(0,212,255,0.04); }
+        .insights-host .org-table tr.expandable:hover { background: var(--accent-soft); }
         .insights-host .org-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-        .insights-host .org-detail { background: rgba(0,212,255,0.04); padding: 1.5rem 2rem; border-left: 3px solid var(--copilot-cyan, #00D4FF); }
+        .insights-host .org-detail { background: var(--accent-soft); padding: 1.5rem 2rem; border-left: 3px solid var(--accent); }
         .insights-host .org-detail .cohort-pill { display: inline-block; padding: 0.4rem 0.85rem; border-radius: 999px; font-size: 0.85rem; margin: 0.25rem 0.4rem 0.25rem 0; color: white; font-weight: 600; }
         .insights-host .controls { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
         .insights-host .controls input, .insights-host .controls select { background: var(--surface-raised, #253449); border: 1px solid var(--border, rgba(255,255,255,0.08)); color: var(--text-primary, #F1F5F9); padding: 0.5rem 0.85rem; border-radius: 8px; font-size: 0.9rem; }
@@ -65,13 +68,13 @@
         .insights-host .behavior-card h3 { margin: 0 0 0.75rem; color: var(--text-primary, #F1F5F9); font-size: 1rem; }
         .insights-host .app-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
         .insights-host .app-row .name { flex: 0 0 130px; font-size: 0.85rem; color: var(--text-primary, #F1F5F9); }
-        .insights-host .app-row .bar { flex: 1; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+        .insights-host .app-row .bar { flex: 1; height: 8px; background: var(--light-gray); border-radius: 4px; overflow: hidden; }
         .insights-host .app-row .bar-fill { height: 100%; background: var(--copilot-cyan, #00D4FF); }
         .insights-host .app-row .pct { flex: 0 0 50px; text-align: right; font-size: 0.8rem; color: var(--text-secondary, #94A3B8); font-variant-numeric: tabular-nums; }
         /* Risk & Waste */
         .insights-host .risk-table { width: 100%; border-collapse: collapse; }
         .insights-host .risk-table th { padding: 0.75rem 1rem; text-align: left; background: var(--surface-raised, #253449); color: var(--text-secondary, #94A3B8); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        .insights-host .risk-table td { padding: 0.85rem 1rem; color: var(--text-primary, #F1F5F9); font-size: 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .insights-host .risk-table td { padding: 0.85rem 1rem; color: var(--text-primary, #F1F5F9); font-size: 0.9rem; border-bottom: 1px solid var(--rule); }
         .insights-host .risk-table .num { text-align: right; font-variant-numeric: tabular-nums; }
         .insights-host .pill { display: inline-block; padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; color: white; }
         .insights-host .waste-callout { background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(245,158,11,0.1)); border: 1px solid rgba(245,158,11,0.3); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; }
@@ -146,9 +149,9 @@
                     <h2>Cohort migration (last 4 weeks vs prior 4 weeks) ${IS.tooltip({ label: 'How many users moved up, stayed, or moved down in cohort between the two 4-week windows.', math: 'For each person P: priorCohort = cohort at week (latest - 4). recentCohort = cohort at latest week. Matrix[priorCohort][recentCohort] += 1. Upper triangle (ti<fi) = moved UP; diagonal = stayed; lower (ti>fi) = moved DOWN.' })}</h2>
                     <p class="lede">Rows = where each user was at <strong>${migration.priorLabel}</strong>. Columns = where they are at <strong>${migration.recentLabel}</strong>. Green = moved up, red = moved down, neutral = stayed.</p>
                     <div class="kpi-row">
-                        <div class="kpi" style="border-left-color:#10b981;"><div class="label">Moved Up</div><div class="value">${IS.fmtInt(upTotal)}</div><div class="sub">${IS.fmtPct(upTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
-                        <div class="kpi" style="border-left-color:#94A3B8;"><div class="label">Stayed</div><div class="value">${IS.fmtInt(sameTotal)}</div><div class="sub">${IS.fmtPct(sameTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
-                        <div class="kpi" style="border-left-color:#ef4444;"><div class="label">Moved Down</div><div class="value">${IS.fmtInt(downTotal)}</div><div class="sub">${IS.fmtPct(downTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
+                        <div class="kpi" style="border-left-color:var(--positive);"><div class="label">Moved Up</div><div class="value">${IS.fmtInt(upTotal)}</div><div class="sub">${IS.fmtPct(upTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
+                        <div class="kpi" style="border-left-color:var(--text-tertiary);"><div class="label">Stayed</div><div class="value">${IS.fmtInt(sameTotal)}</div><div class="sub">${IS.fmtPct(sameTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
+                        <div class="kpi" style="border-left-color:var(--negative);"><div class="label">Moved Down</div><div class="value">${IS.fmtInt(downTotal)}</div><div class="sub">${IS.fmtPct(downTotal / Math.max(totalUsers,1) * 100, 1)} of base</div></div>
                     </div>
                     <div style="overflow-x:auto;">
                         <table class="migration-table">
@@ -178,7 +181,7 @@
                         <div class="kpi"><div class="label">Median Weeks</div><div class="value">${tth.median}</div><div class="sub">half got there faster</div></div>
                         <div class="kpi"><div class="label">Mean Weeks</div><div class="value">${tth.mean.toFixed(1)}</div><div class="sub">average</div></div>
                     </div>
-                    <div class="chart-wrapper">${IS.svgBarChart(histData, { width: 880, height: 260, color: '#00D4FF' })}</div>
+                    <div class="chart-wrapper">${IS.svgBarChart(histData, { width: 880, height: 260, color: ink('--accent', '#4C8DFF') })}</div>
                     ${IS.mathBlock({ label: 'Time-to-habit per person', formula: 'TTH(P) weeks = (firstHabitWeek(P) - firstActionWeek(P)) / 7\nmedian = 50th percentile of {TTH(P) : P reached habit}\nmean   = sum(TTH) / count', note: 'Bar i = number of users whose TTH equals i weeks. The final bar (i+) = the right-tail bucket.' })}
                 </div>`;
         } else {
@@ -301,9 +304,9 @@
             </tr>`;
         const tbody = table.querySelector('tbody');
         tbody.innerHTML = orgs.map((o, i) => {
-            const trendColor = o.trendPct > 5 ? '#10b981' : o.trendPct < -5 ? '#ef4444' : '#94A3B8';
+            const trendColor = o.trendPct > 5 ? 'var(--positive)' : o.trendPct < -5 ? 'var(--negative)' : 'var(--text-tertiary)';
             const trendArrow = o.trendPct > 5 ? '&uarr;' : o.trendPct < -5 ? '&darr;' : '&rarr;';
-            const sparkColor = o.trendPct >= 0 ? '#10b981' : '#ef4444';
+            const sparkColor = o.trendPct >= 0 ? ink('--positive', '#46B77F') : ink('--negative', '#D2685F');
             return `
             <tr class="expandable js-orgRow" data-idx="${i}">
                 <td><strong>${esc(o.orgName)}</strong></td>
@@ -321,7 +324,7 @@
                     <div style="margin-top:0.75rem;">
                         ${Object.entries(o.cohortCounts).map(([name, count]) => {
                             if (!count) return '';
-                            const color = IS.COHORT_COLORS[name] || '#94A3B8';
+                            const color = IS.COHORT_COLORS[name] || ink('--text-tertiary', '#6C7684');
                             return `<span class="cohort-pill" style="background:${color};">${name}: ${count}</span>`;
                         }).join('')}
                     </div>
@@ -394,7 +397,7 @@
                 <h2>Monthly value attribution by app ${IS.tooltip({ label: 'Splits the total monthly productivity value across the apps your users actually performed actions in.', math: 'For each app A: actionsA = &Sigma; over all persons of (&Sigma; weekly app[A] actions). monthlyActionsA = actionsA / (weeks / 4.33). monthlyValueA = monthlyActionsA &times; minutesPerAction / 60 &times; professionalRate.' })}</h2>
                 <p class="lede">Action volume per app &times; ${cfg.minutesPerAction} min &times; $${cfg.professionalRate}/hr. Reveals which surface is doing the heavy lifting and where to invest training next.</p>
                 ${kpis}
-                <div style="overflow-x:auto;">${IS.svgHBarChart(appBarData, { width: 800, color: '#00D4FF', padL: 200, valueFmt: v => IS.fmtMoneyShort(v) })}</div>
+                <div style="overflow-x:auto;">${IS.svgHBarChart(appBarData, { width: 800, color: ink('--accent', '#4C8DFF'), padL: 200, valueFmt: v => IS.fmtMoneyShort(v) })}</div>
                 ${IS.mathBlock({ label: 'Per-app value', formula: 'actionsA       = &Sigma;over all persons, weeks of apps[A]\nmonthlyActionsA = actionsA / (numWeeks / 4.33)\nmonthlyValueA  = monthlyActionsA &times; minutesPerAction / 60 &times; professionalRate', note: 'Numerator comes straight from the per-app columns in your Viva export (e.g. "Copilot actions taken in Word").' })}
             </div>`;
 
@@ -466,10 +469,10 @@
                 <p class="lede">Intelligent recap and Copilot assist hours are measured directly by Viva. Modeled here at half an hour reclaimed per recap and full-rate for assist hours.</p>
                 <div class="kpi-row">
                     <div class="kpi"><div class="label">Intelligent Recap actions / mo</div><div class="value">${IS.fmtInt(monthlyRecap)}</div><div class="sub">across all users</div></div>
-                    <div class="kpi" style="border-left-color:#10b981;"><div class="label">Modeled meeting hours reclaimed</div><div class="value">${IS.fmtInt(recapHoursReclaimed)}</div><div class="sub">at 0.5 hr / recap</div></div>
-                    <div class="kpi" style="border-left-color:#10b981;"><div class="label">Recap value (monthly)</div><div class="value">${IS.fmtMoneyShort(recapValue)}</div><div class="sub">at $${cfg.professionalRate}/hr</div></div>
-                    <div class="kpi" style="border-left-color:#00D4FF;"><div class="label">Copilot assist hours / mo</div><div class="value">${IS.fmtInt(monthlyAssistHrs)}</div><div class="sub">measured directly</div></div>
-                    <div class="kpi" style="border-left-color:#00D4FF;"><div class="label">Assist-hour value</div><div class="value">${IS.fmtMoneyShort(assistValue)}/mo</div><div class="sub">straight-line</div></div>
+                    <div class="kpi" style="border-left-color:var(--positive);"><div class="label">Modeled meeting hours reclaimed</div><div class="value">${IS.fmtInt(recapHoursReclaimed)}</div><div class="sub">at 0.5 hr / recap</div></div>
+                    <div class="kpi" style="border-left-color:var(--positive);"><div class="label">Recap value (monthly)</div><div class="value">${IS.fmtMoneyShort(recapValue)}</div><div class="sub">at $${cfg.professionalRate}/hr</div></div>
+                    <div class="kpi" style="border-left-color:var(--accent);"><div class="label">Copilot assist hours / mo</div><div class="value">${IS.fmtInt(monthlyAssistHrs)}</div><div class="sub">measured directly</div></div>
+                    <div class="kpi" style="border-left-color:var(--accent);"><div class="label">Assist-hour value</div><div class="value">${IS.fmtMoneyShort(assistValue)}/mo</div><div class="sub">straight-line</div></div>
                 </div>
                 ${IS.mathBlock({ label: 'Meeting math', formula: 'monthlyRecap        = totalRecap / (weeks / 4.33)\nrecapHoursReclaimed = monthlyRecap &times; 0.5    (heuristic: half-hour per recap)\nrecapValue          = recapHoursReclaimed &times; professionalRate\nassistValue         = monthlyAssistHrs &times; professionalRate', note: 'The 0.5-hr-per-recap factor is conservative. Microsoft research has measured 1.0-1.5 hr per non-attended meeting reclaimed.' })}
             </div>`;
@@ -497,31 +500,31 @@
 
         const wasteCard = `
             <div class="waste-callout">
-                <h2 style="margin:0 0 0.5rem;color:#F1F5F9;font-size:1.4rem;">License waste opportunity ${IS.tooltip({ label: 'Licenses going to users with little or no usage activity.', math: 'wastedUsers = count(persons where current cohort in {Non, Low}). wastedSpend = wastedUsers &times; licenseCost. annualWaste = wastedSpend &times; 12. wastedValuePct = (NonValue + LowValue) / totalMonthlyValue &times; 100.' })}</h2>
-                <p style="color:#94A3B8;margin:0 0 1.5rem;">${wastedUsers} licenses sitting at <strong>Non</strong> or <strong>Low</strong> usage. Each one is paying full price for less than ${wastedValuePct < 1 ? wastedValuePct.toFixed(2) : wastedValuePct.toFixed(1)}% of total value generated.</p>
+                <h2 style="margin:0 0 0.5rem;color:var(--text-primary);font-size:1.4rem;">License waste opportunity ${IS.tooltip({ label: 'Licenses going to users with little or no usage activity.', math: 'wastedUsers = count(persons where current cohort in {Non, Low}). wastedSpend = wastedUsers &times; licenseCost. annualWaste = wastedSpend &times; 12. wastedValuePct = (NonValue + LowValue) / totalMonthlyValue &times; 100.' })}</h2>
+                <p style="color:var(--text-secondary);margin:0 0 1.5rem;">${wastedUsers} licenses sitting at <strong>Non</strong> or <strong>Low</strong> usage. Each one is paying full price for less than ${wastedValuePct < 1 ? wastedValuePct.toFixed(2) : wastedValuePct.toFixed(1)}% of total value generated.</p>
                 <div class="kpi-row">
-                    <div class="kpi" style="border-left-color:#ef4444;">
+                    <div class="kpi" style="border-left-color:var(--negative);">
                         <div class="label">Wasted licenses</div>
                         <div class="value">${IS.fmtInt(wastedUsers)}</div>
                         <div class="sub">${IS.fmtPct(wastedUsers / Math.max(cohorts.totals.count, 1) * 100, 1)} of base</div>
                     </div>
-                    <div class="kpi" style="border-left-color:#ef4444;">
+                    <div class="kpi" style="border-left-color:var(--negative);">
                         <div class="label">Monthly spend at risk</div>
                         <div class="value">${IS.fmtMoney(wastedSpend)}</div>
                         <div class="sub">at $${cfg.licenseCost}/user/month</div>
                     </div>
-                    <div class="kpi" style="border-left-color:#ef4444;">
+                    <div class="kpi" style="border-left-color:var(--negative);">
                         <div class="label">Annual waste exposure</div>
                         <div class="value">${IS.fmtMoneyShort(annualWaste)}</div>
                         <div class="sub">if not redeployed</div>
                     </div>
-                    <div class="kpi" style="border-left-color:#10b981;">
+                    <div class="kpi" style="border-left-color:var(--positive);">
                         <div class="label">Value contribution</div>
                         <div class="value">&lt; ${wastedValuePct.toFixed(1)}%</div>
                         <div class="sub">of total monthly value</div>
                     </div>
                 </div>
-                <p style="color:#F1F5F9;font-size:0.9rem;margin:1rem 0 0;padding:0.75rem 1rem;background:rgba(255,255,255,0.05);border-radius:8px;">
+                <p style="color:var(--text-primary);font-size:0.9rem;margin:1rem 0 0;padding:0.75rem 1rem;background:var(--light-gray);border-radius:8px;">
                     <strong>Recommendation:</strong> reassign these ${wastedUsers} licenses to a pilot group of high-need users from your unlicensed pool, or pause them at next renewal. Either move recovers ${IS.fmtMoneyShort(annualWaste)} of annual exposure with negligible value loss.
                 </p>
                 ${IS.mathBlock({ label: 'Waste math', formula: 'wastedUsers = |{P : cohort(P, latest) &isin; {Non Users, Low Users}}|\nwastedSpend = wastedUsers &times; licenseCost\nannualWaste = wastedSpend &times; 12\nwastedValuePct = (NonValue + LowValue) / totalMonthlyValue &times; 100' })}
@@ -529,17 +532,17 @@
 
         const atRiskKpis = `
             <div class="kpi-row">
-                <div class="kpi" style="border-left-color:#ef4444;">
+                <div class="kpi" style="border-left-color:var(--negative);">
                     <div class="label">At-risk users</div>
                     <div class="value">${IS.fmtInt(atRisk.length)}</div>
                     <div class="sub">were Power/Habitual, now lower</div>
                 </div>
-                <div class="kpi" style="border-left-color:#ef4444;">
+                <div class="kpi" style="border-left-color:var(--negative);">
                     <div class="label">Power Users at risk</div>
                     <div class="value">${IS.fmtInt(atRiskFromPower.length)}</div>
                     <div class="sub">peak engagement slipped</div>
                 </div>
-                <div class="kpi" style="border-left-color:#f59e0b;">
+                <div class="kpi" style="border-left-color:var(--warn);">
                     <div class="label">Habitual Users at risk</div>
                     <div class="value">${IS.fmtInt(atRiskFromHabit.length)}</div>
                     <div class="sub">losing the habit</div>
@@ -607,22 +610,22 @@
         );
         const tbody = main.querySelector('.js-atRiskBody');
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#94A3B8;padding:2rem;">No at-risk users match this filter</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-tertiary);padding:2rem;">No at-risk users match this filter</td></tr>`;
             return;
         }
         tbody.innerHTML = filtered.slice(0, 500).map(r => {
-            const peakColor = IS.COHORT_COLORS[r.peakCohort] || '#94A3B8';
-            const currColor = IS.COHORT_COLORS[r.currentCohort] || '#94A3B8';
+            const peakColor = IS.COHORT_COLORS[r.peakCohort] || ink('--text-tertiary', '#6C7684');
+            const currColor = IS.COHORT_COLORS[r.currentCohort] || ink('--text-tertiary', '#6C7684');
             return `<tr>
-                <td><code style="font-size:0.8rem;color:#94A3B8;">${esc(r.personId.slice(0, 12))}</code></td>
+                <td><code style="font-size:0.8rem;color:var(--text-tertiary);">${esc(r.personId.slice(0, 12))}</code></td>
                 <td>${esc(r.org)}</td>
                 <td><span class="pill" style="background:${peakColor};">${r.peakCohort}</span></td>
                 <td><span class="pill" style="background:${currColor};">${r.currentCohort}</span></td>
-                <td class="num" style="color:#ef4444;font-weight:600;">&darr; ${r.drop}</td>
+                <td class="num" style="color:var(--negative);font-weight:600;">&darr; ${r.drop}</td>
                 <td class="num">${IS.fmtInt(r.recentActions)}</td>
                 <td class="num">${r.avg12.toFixed(1)}</td>
             </tr>`;
-        }).join('') + (filtered.length > 500 ? `<tr><td colspan="7" style="text-align:center;color:#94A3B8;padding:1rem;">Showing top 500 of ${filtered.length}</td></tr>` : '');
+        }).join('') + (filtered.length > 500 ? `<tr><td colspan="7" style="text-align:center;color:var(--text-tertiary);padding:1rem;">Showing top 500 of ${filtered.length}</td></tr>` : '');
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -671,25 +674,30 @@
         const histPts = series.map((s, i) => `${xAt(i).toFixed(1)},${yAt(s.pct).toFixed(1)}`).join(' ');
         const projPts = projection.map((p, i) => `${xAt(series.length + i).toFixed(1)},${yAt(p.pct).toFixed(1)}`).join(' ');
         const connectPts = `${xAt(series.length - 1).toFixed(1)},${yAt(series[series.length - 1].pct).toFixed(1)} ${xAt(series.length).toFixed(1)},${yAt(projection[0].pct).toFixed(1)}`;
+        const axisInk = ink('--text-tertiary', '#6C7684');
+        const gridInk = ink('--rule', 'rgba(255,255,255,0.075)');
+        const actualInk = ink('--accent', '#4C8DFF');
+        const projInk = ink('--positive', '#46B77F');
+        const todayInk = ink('--warn', '#C9973F');
         const yTicks = [0, 25, 50, 75, 100].filter(v => v <= maxY).map(v =>
-            `<text x="${padL - 8}" y="${yAt(v).toFixed(1) + 4}" fill="#94A3B8" font-size="11" text-anchor="end">${v}%</text>
-             <line x1="${padL}" x2="${chartW - padR}" y1="${yAt(v).toFixed(1)}" y2="${yAt(v).toFixed(1)}" stroke="rgba(255,255,255,0.06)"/>`
+            `<text x="${padL - 8}" y="${yAt(v).toFixed(1) + 4}" fill="${axisInk}" font-size="11" text-anchor="end">${v}%</text>
+             <line x1="${padL}" x2="${chartW - padR}" y1="${yAt(v).toFixed(1)}" y2="${yAt(v).toFixed(1)}" stroke="${gridInk}"/>`
         ).join('');
         const xTickIdx = [0, series.length - 1, combined.length - 1];
-        const xLabels = xTickIdx.map(i => `<text x="${xAt(i).toFixed(1)}" y="${chartH - padB + 18}" fill="#94A3B8" font-size="11" text-anchor="middle">${combined[i].week}</text>`).join('');
-        const divider = `<line x1="${xAt(series.length - 1).toFixed(1)}" x2="${xAt(series.length - 1).toFixed(1)}" y1="${padT}" y2="${chartH - padB}" stroke="rgba(245,158,11,0.4)" stroke-dasharray="4,4"/>
-                         <text x="${xAt(series.length - 1).toFixed(1)}" y="${padT + 12}" fill="#f59e0b" font-size="11" text-anchor="middle">today</text>`;
+        const xLabels = xTickIdx.map(i => `<text x="${xAt(i).toFixed(1)}" y="${chartH - padB + 18}" fill="${axisInk}" font-size="11" text-anchor="middle">${combined[i].week}</text>`).join('');
+        const divider = `<line x1="${xAt(series.length - 1).toFixed(1)}" x2="${xAt(series.length - 1).toFixed(1)}" y1="${padT}" y2="${chartH - padB}" stroke="${todayInk}" stroke-opacity="0.4" stroke-dasharray="4,4"/>
+                         <text x="${xAt(series.length - 1).toFixed(1)}" y="${padT + 12}" fill="${todayInk}" font-size="11" text-anchor="middle">today</text>`;
         const forecastSvg = `<svg width="${chartW}" height="${chartH}" viewBox="0 0 ${chartW} ${chartH}" style="max-width:100%;height:auto;">
             ${yTicks}
-            <polyline points="${histPts}" fill="none" stroke="#00D4FF" stroke-width="2.5"/>
-            <polyline points="${connectPts}" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="3,3" opacity="0.7"/>
-            <polyline points="${projPts}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-dasharray="6,4"/>
+            <polyline points="${histPts}" fill="none" stroke="${actualInk}" stroke-width="2.5"/>
+            <polyline points="${connectPts}" fill="none" stroke="${projInk}" stroke-width="2" stroke-dasharray="3,3" opacity="0.7"/>
+            <polyline points="${projPts}" fill="none" stroke="${projInk}" stroke-width="2.5" stroke-dasharray="6,4"/>
             ${divider}
             ${xLabels}
         </svg>
         <div style="display:flex;gap:1.5rem;margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary,#94A3B8);">
-            <span><span style="display:inline-block;width:14px;height:3px;background:#00D4FF;vertical-align:middle;margin-right:6px;"></span>Actual</span>
-            <span><span style="display:inline-block;width:14px;height:3px;background:#10b981;vertical-align:middle;margin-right:6px;"></span>Projected (next ${projectN}w)</span>
+            <span><span style="display:inline-block;width:14px;height:3px;background:var(--accent);vertical-align:middle;margin-right:6px;"></span>Actual</span>
+            <span><span style="display:inline-block;width:14px;height:3px;background:var(--positive);vertical-align:middle;margin-right:6px;"></span>Projected (next ${projectN}w)</span>
         </div>`;
 
         const forecastCard = `
@@ -698,8 +706,8 @@
                 <p class="lede">Linear extrapolation of the last ${fitN} weeks of real cohort migration, projected ${projectN} weeks out. Slope ${slopePerWeek >= 0 ? '+' : ''}${slopePerWeek.toFixed(2)}pp / week.</p>
                 <div class="kpi-row">
                     <div class="kpi"><div class="label">Today</div><div class="value">${currentPct.toFixed(1)}%</div><div class="sub">${IS.fmtInt(series[series.length - 1].count)} users</div></div>
-                    <div class="kpi" style="border-left-color:#10b981;"><div class="label">In ${projectN} weeks</div><div class="value">${projectedPct.toFixed(1)}%</div><div class="sub">${IS.fmtInt(projection[projection.length - 1].count)} users</div></div>
-                    <div class="kpi" style="border-left-color:${slopePerWeek > 0 ? '#10b981' : '#ef4444'};"><div class="label">Trajectory</div><div class="value">${slopePerWeek >= 0 ? '+' : ''}${slopePerWeek.toFixed(2)}pp/w</div><div class="sub">${slopePerWeek > 0.5 ? 'strong growth' : slopePerWeek > 0 ? 'mild growth' : slopePerWeek > -0.5 ? 'flat' : 'declining'}</div></div>
+                    <div class="kpi" style="border-left-color:var(--positive);"><div class="label">In ${projectN} weeks</div><div class="value">${projectedPct.toFixed(1)}%</div><div class="sub">${IS.fmtInt(projection[projection.length - 1].count)} users</div></div>
+                    <div class="kpi" style="border-left-color:${slopePerWeek > 0 ? 'var(--positive)' : 'var(--negative)'};"><div class="label">Trajectory</div><div class="value">${slopePerWeek >= 0 ? '+' : ''}${slopePerWeek.toFixed(2)}pp/w</div><div class="sub">${slopePerWeek > 0.5 ? 'strong growth' : slopePerWeek > 0 ? 'mild growth' : slopePerWeek > -0.5 ? 'flat' : 'declining'}</div></div>
                 </div>
                 <div style="overflow-x:auto;">${forecastSvg}</div>
                 ${IS.mathBlock({ label: 'Linear regression', formula: 'For y_t = pct of habitual+power at week t over the last 8 weeks:\n   m = (n &Sigma;xy - &Sigma;x &Sigma;y) / (n &Sigma;x&sup2; - (&Sigma;x)&sup2;)\n   b = (&Sigma;y - m &Sigma;x) / n\nProjected pct(t+k) = clamp(m&middot;(t+k)+b, 0, 100)  for k = 1..13', note: 'A simple OLS fit. For datasets &lt; 8 weeks the available range is used. Slope is reported as percentage-points per week.' })}
@@ -758,8 +766,8 @@
             cahKpisEl.innerHTML = `
                 <div class="kpi-row">
                     <div class="kpi"><div class="label">Baseline (actions &times; min)</div><div class="value">${IS.fmtMoneyShort(baselineMonthlyValue)}</div><div class="sub">${baselineRoi.toFixed(1)}x ROI</div></div>
-                    <div class="kpi" style="border-left-color:#10b981;"><div class="label">Adjusted CAH at ${penalty.toFixed(2)}&times;</div><div class="value">${IS.fmtMoneyShort(adjustedMonthlyValue)}</div><div class="sub">${adjustedRoi.toFixed(1)}x ROI</div></div>
-                    <div class="kpi" style="border-left-color:${diff >= 0 ? '#10b981' : '#ef4444'};"><div class="label">Variance</div><div class="value">${diff >= 0 ? '+' : ''}${IS.fmtMoneyShort(Math.abs(diff))}</div><div class="sub">${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}% vs baseline</div></div>
+                    <div class="kpi" style="border-left-color:var(--positive);"><div class="label">Adjusted CAH at ${penalty.toFixed(2)}&times;</div><div class="value">${IS.fmtMoneyShort(adjustedMonthlyValue)}</div><div class="sub">${adjustedRoi.toFixed(1)}x ROI</div></div>
+                    <div class="kpi" style="border-left-color:${diff >= 0 ? 'var(--positive)' : 'var(--negative)'};"><div class="label">Variance</div><div class="value">${diff >= 0 ? '+' : ''}${IS.fmtMoneyShort(Math.abs(diff))}</div><div class="sub">${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(0)}% vs baseline</div></div>
                 </div>`;
         };
         penaltyEl.addEventListener('input', renderCah);
@@ -789,20 +797,24 @@
         const maxSwing = Math.max(...swings.flatMap(s => [Math.abs(s.up), Math.abs(s.dn)]), 1);
         const centerX = padLT + innerWT / 2;
         const scale = (innerWT / 2) / maxSwing;
+        const tornadoLabelInk = ink('--text-primary', '#E9ECF1');
+        const tornadoAxisInk = ink('--text-tertiary', '#6C7684');
+        const tornadoUpInk = ink('--positive', '#46B77F');
+        const tornadoDnInk = ink('--negative', '#D2685F');
         const tornadoRows = swings.map((s, i) => {
             const y = 20 + i * rowH;
             const dnW = Math.abs(s.dn) * scale;
             const upW = Math.abs(s.up) * scale;
             return `
-                <text x="${padLT - 10}" y="${y + rowH * 0.5}" fill="#F1F5F9" font-size="13" text-anchor="end">${s.label}</text>
-                <rect x="${centerX - dnW}" y="${y + rowH * 0.2}" width="${dnW.toFixed(1)}" height="${rowH * 0.6}" fill="#ef4444" opacity="0.85"/>
-                <rect x="${centerX}" y="${y + rowH * 0.2}" width="${upW.toFixed(1)}" height="${rowH * 0.6}" fill="#10b981" opacity="0.85"/>
-                <text x="${centerX - dnW - 4}" y="${y + rowH * 0.55}" fill="#ef4444" font-size="11" text-anchor="end">${IS.fmtMoneyShort(s.dn)}</text>
-                <text x="${centerX + upW + 4}" y="${y + rowH * 0.55}" fill="#10b981" font-size="11">+${IS.fmtMoneyShort(s.up)}</text>
+                <text x="${padLT - 10}" y="${y + rowH * 0.5}" fill="${tornadoLabelInk}" font-size="13" text-anchor="end">${s.label}</text>
+                <rect x="${centerX - dnW}" y="${y + rowH * 0.2}" width="${dnW.toFixed(1)}" height="${rowH * 0.6}" fill="${tornadoDnInk}" opacity="0.85"/>
+                <rect x="${centerX}" y="${y + rowH * 0.2}" width="${upW.toFixed(1)}" height="${rowH * 0.6}" fill="${tornadoUpInk}" opacity="0.85"/>
+                <text x="${centerX - dnW - 4}" y="${y + rowH * 0.55}" fill="${tornadoDnInk}" font-size="11" text-anchor="end">${IS.fmtMoneyShort(s.dn)}</text>
+                <text x="${centerX + upW + 4}" y="${y + rowH * 0.55}" fill="${tornadoUpInk}" font-size="11">+${IS.fmtMoneyShort(s.up)}</text>
             `;
         }).join('');
-        const axisLine = `<line x1="${centerX}" x2="${centerX}" y1="10" y2="${tH - 10}" stroke="#94A3B8" stroke-dasharray="3,3"/>
-                          <text x="${centerX}" y="${tH - 4}" fill="#94A3B8" font-size="11" text-anchor="middle">baseline ${IS.fmtMoneyShort(baselineMonthlyValue)}/mo</text>`;
+        const axisLine = `<line x1="${centerX}" x2="${centerX}" y1="10" y2="${tH - 10}" stroke="${tornadoAxisInk}" stroke-dasharray="3,3"/>
+                          <text x="${centerX}" y="${tH - 4}" fill="${tornadoAxisInk}" font-size="11" text-anchor="middle">baseline ${IS.fmtMoneyShort(baselineMonthlyValue)}/mo</text>`;
         main.querySelector('.js-tornadoChart').innerHTML = `
             <div style="overflow-x:auto;">
                 <svg width="${tW}" height="${tH}" viewBox="0 0 ${tW} ${tH}" style="max-width:100%;height:auto;">

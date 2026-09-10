@@ -380,9 +380,9 @@ function showFilePreview(fileName, data) {
         if (s <= 10) return 'about 10 seconds';
         if (s <= 20) return 'about 20 seconds';
         if (s <= 30) return 'about 30 seconds';
-        return 'about ' + (Math.ceil(s / 30) * 30 / 60 >= 1
-            ? Math.ceil(s / 30) / 2 + ' minutes'
-            : Math.ceil(s / 30) * 30 + ' seconds');
+        if (s <= 45) return 'about 45 seconds';
+        const mins = Math.ceil(s / 30) / 2; // round up to the next half minute
+        return 'about ' + mins + (mins === 1 ? ' minute' : ' minutes');
     };
     const loadNote = data.loadSeconds
         ? `<div style="margin-top:1rem; font-size:0.875rem; color:var(--text-secondary);">

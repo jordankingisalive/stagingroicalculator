@@ -546,22 +546,39 @@
     //   source - (optional) where the rule is defined, e.g. "Power BI Adoption template (Adoption M Code.txt)"
     function tooltip(opts) {
         opts = opts || {};
-        const label = String(opts.label || '').replace(/"/g, '&quot;');
-        const math = String(opts.math || '').replace(/"/g, '&quot;');
-        const source = opts.source ? `\n\nSource: ${String(opts.source).replace(/"/g, '&quot;')}` : '';
-        const title = `${label}\n\nMath: ${math}${source}`;
+        const clean = (v) => String(v == null ? '' : v).replace(/"/g, '&quot;').trim();
+        // Native title attributes can't hold markup, so bullets are drawn with • + newlines.
+        const bullet = (v) => (clean(v).indexOf('|') !== -1
+            ? clean(v).split('|')
+            : clean(v).replace(/([a-z0-9%)\]])\.\s+(?=[A-Z])/g, '$1\u0000').split('\u0000'))
+            .map(s => s.trim().replace(/\s*\.\s*$/, ''))
+            .filter(Boolean)
+            .map(s => `\u2022 ${s}`)
+            .join('\n');
+        const lines = [];
+        if (opts.label) lines.push(bullet(opts.label));
+        if (opts.math) lines.push('', 'Math:', `\u2022 ${clean(opts.math)}`);
+        if (opts.source) lines.push('', 'Source:', `\u2022 ${clean(opts.source)}`);
+        const title = lines.join('\n');
         return `<span class="cri-tip" tabindex="0" title="${title}" aria-label="${title}">&#9432;</span>`;
     }
 
-    // mathBlock({ label, formula, note })  -> small monospaced math callout under a card body
+    // mathBlock({ label, formula, note })  -> small math callout under a card body.
+    // Each newline-separated line of `formula` becomes one bullet; the text itself
+    // (including HTML entities such as &times; / &divide; / &ge;) is passed through verbatim.
     function mathBlock(opts) {
         opts = opts || {};
         const label   = opts.label   || 'Math';
         const formula = opts.formula || '';
         const note    = opts.note    || '';
+        const items = String(formula).split('\n')
+            .map(line => line.replace(/\s+$/, ''))
+            .filter(line => line.trim() !== '')
+            .map(line => `<li class="cri-math-item">${line.trim()}</li>`)
+            .join('');
         return `<div class="cri-math">
             <div class="cri-math-label">${label}</div>
-            <code class="cri-math-formula">${formula}</code>
+            ${items ? `<ul class="cri-math-list">${items}</ul>` : ''}
             ${note ? `<div class="cri-math-note">${note}</div>` : ''}
         </div>`;
     }

@@ -51,7 +51,10 @@
     /* ── Type ────────────────────────────────────────────────────────────── */
     --font-display: 'Newsreader', Georgia, serif;
     --font-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
-    --font-mono: 'IBM Plex Mono', 'Cascadia Mono', Consolas, monospace;
+    /* Labels and figures use the sans face with tabular figures — the monospace
+       look is reserved for genuine code and formulas via --font-code. */
+    --font-mono: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --font-code: 'IBM Plex Mono', 'Cascadia Mono', Consolas, monospace;
 
     /* ── Geometry ────────────────────────────────────────────────────────── */
     --radius: 10px;
@@ -125,9 +128,9 @@
     --rule-strong: rgba(23, 26, 33, 0.22);
 
     /* ── Text ────────────────────────────────────────────────────────────── */
-    --text-primary: #15181E;
-    --text-secondary: #525964;
-    --text-tertiary: #838A95;
+    --text-primary: #12151B;
+    --text-secondary: #3E4652;
+    --text-tertiary: #5C6673;
 
     /* ── The single interaction accent ───────────────────────────────────── */
     --accent: #1B5FD9;
@@ -221,7 +224,8 @@
 :root[data-theme="light"] .segmented button.active,
 :root[data-theme="light"] .time-toggle-btn.active {
     background: #FFFFFF;
-    box-shadow: 0 1px 2px var(--shadow), inset 0 0 0 1px var(--rule);
+    border-color: var(--accent);
+    box-shadow: 0 1px 2px var(--shadow);
 }
 
 /* Select chevron is a data-URI, so its ink can't be a var(). */
@@ -386,7 +390,7 @@ a:hover {
 }
 
 code {
-    font-family: var(--font-mono);
+    font-family: var(--font-code);
     font-size: 0.875em;
 }
 
@@ -400,16 +404,16 @@ code {
     font-weight: 400;
 }
 
-/* Eyebrow: the small uppercase mono label that sits above a figure. */
+/* Eyebrow: the small uppercase label that sits above a figure. */
 .eyebrow,
 .metric-label {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-weight: 600;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     line-height: 1.4;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--text-tertiary);
+    letter-spacing: 0.09em;
+    color: var(--text-secondary);
 }
 
 /* ── Numerals ────────────────────────────────────────────────────────────── */
@@ -480,10 +484,10 @@ header {
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 0.875rem;
-    background: transparent;
-    border: 1px solid var(--rule);
+    background: var(--ink-700);
+    border: 1px solid var(--rule-strong);
     border-radius: var(--radius-sm);
-    color: var(--text-secondary);
+    color: var(--text-primary);
     cursor: pointer;
     font-family: var(--font-sans);
     font-size: 0.8125rem;
@@ -578,14 +582,26 @@ header {
 
 .nav-btn-active {
     color: var(--text-primary);
-    background: none;
+    font-weight: 600;
+    background: var(--accent-soft);
     box-shadow: none;
     border-bottom-color: var(--accent);
+    border-bottom-width: 3px;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    border-radius: 6px 6px 0 0;
+}
+
+/* .nav-text carries its own weight, so the active state has to win on the span too. */
+.nav-btn-active .nav-text {
+    font-weight: 600;
+    color: var(--text-primary);
 }
 
 .nav-btn-active:hover {
     transform: none;
     box-shadow: none;
+    background: var(--accent-soft);
     border-bottom-color: var(--accent);
 }
 
@@ -630,7 +646,7 @@ header {
     -webkit-appearance: none;
     padding: 0.4375rem 0.875rem;
     background: transparent;
-    border: none;
+    border: 1px solid transparent;
     border-radius: 6px;
     font-family: var(--font-sans);
     font-size: 0.8125rem;
@@ -655,6 +671,7 @@ header {
     background: var(--ink-500);
     color: var(--text-primary);
     font-weight: 600;
+    border-color: var(--accent);
     box-shadow: inset 0 0 0 1px var(--rule);
 }
 
@@ -740,7 +757,35 @@ header {
 
 .roi-table-container {
     padding: 1.75rem 2rem 2rem;
-    overflow: visible;
+    overflow-x: auto;
+}
+
+/* Wide result tables scroll inside their panel rather than running off the page.
+   Tooltips are portalled to <body>, so clipping the panel is safe. */
+.leaderboard-container {
+    overflow-x: auto;
+}
+
+.sortable-table {
+    font-size: 0.8125rem;
+}
+
+/* Nine columns only fit if the headers are allowed to wrap. */
+.sortable-table th {
+    white-space: normal;
+    padding: 0.625rem 0.5rem;
+}
+
+.sortable-table td {
+    padding: 0.625rem 0.5rem;
+}
+
+#teamsTable th:first-child,
+#teamsTable td:first-child {
+    white-space: normal;
+    min-width: 7rem;
+    max-width: 14rem;
+    word-break: break-word;
 }
 
 .roi-table-container h2,
@@ -753,6 +798,19 @@ header {
 
 .leaderboard-container {
     padding: 1.75rem 2rem 2rem;
+}
+
+/* Top-level section headings on long narrative pages (Adoption Journey).
+   Sized to actually announce a new section rather than read as a sub-label. */
+.page-section-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.75rem, 2.6vw, 2.4rem);
+    font-weight: 600;
+    line-height: 1.18;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    text-align: center;
+    margin: 3.5rem 0 1rem;
 }
 
 /* ── Step cards ──────────────────────────────────────────────────────────── */
@@ -1104,17 +1162,33 @@ details.collapsible-section:not([open]) .toggle-chevron {
     margin-bottom: 0.4rem;
 }
 
-.cri-math-formula {
-    display: block;
-    font-family: var(--font-mono);
+.cri-math-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.cri-math-item {
+    position: relative;
+    padding-left: 1.1rem;
+    margin: 0 0 0.3rem;
+    font-family: var(--font-sans);
     font-variant-numeric: tabular-nums;
     font-size: 0.8125rem;
-    line-height: 1.6;
+    line-height: 1.55;
     color: var(--text-primary);
-    background: transparent;
-    padding: 0;
-    white-space: pre-wrap;
     word-break: break-word;
+}
+
+.cri-math-item:last-child {
+    margin-bottom: 0;
+}
+
+.cri-math-item::before {
+    content: "\2022";
+    position: absolute;
+    left: 0.15rem;
+    color: var(--accent);
 }
 
 .cri-math-note {
@@ -1196,6 +1270,26 @@ tbody tr:last-child td {
 tr:hover {
     background: rgba(255, 255, 255, 0.022);
 }
+
+/* ── Cohort row tints ─────────────────────────────────────────────────────
+   A low-alpha wash keyed to each Usage Threshold tier, fading out to the
+   right so the numbers stay on a clean field. Painted as background-image so
+   the row-hover background-color still reads on top. */
+.cohort-row {
+    background-repeat: no-repeat;
+}
+
+.cohort-row--power    { background-image: linear-gradient(90deg, rgba(70, 183, 127, 0.16), rgba(70, 183, 127, 0) 72%); }
+.cohort-row--habitual { background-image: linear-gradient(90deg, rgba(56, 189, 208, 0.15), rgba(56, 189, 208, 0) 72%); }
+.cohort-row--novice   { background-image: linear-gradient(90deg, rgba(76, 141, 255, 0.14), rgba(76, 141, 255, 0) 72%); }
+.cohort-row--low      { background-image: linear-gradient(90deg, rgba(224, 164, 68, 0.15), rgba(224, 164, 68, 0) 72%); }
+.cohort-row--non      { background-image: linear-gradient(90deg, rgba(210, 104, 95, 0.14), rgba(210, 104, 95, 0) 72%); }
+
+:root[data-theme="light"] .cohort-row--power    { background-image: linear-gradient(90deg, rgba(31, 138, 90, 0.11), rgba(31, 138, 90, 0) 72%); }
+:root[data-theme="light"] .cohort-row--habitual { background-image: linear-gradient(90deg, rgba(20, 138, 156, 0.10), rgba(20, 138, 156, 0) 72%); }
+:root[data-theme="light"] .cohort-row--novice   { background-image: linear-gradient(90deg, rgba(27, 95, 217, 0.09), rgba(27, 95, 217, 0) 72%); }
+:root[data-theme="light"] .cohort-row--low      { background-image: linear-gradient(90deg, rgba(176, 116, 20, 0.11), rgba(176, 116, 20, 0) 72%); }
+:root[data-theme="light"] .cohort-row--non      { background-image: linear-gradient(90deg, rgba(178, 61, 52, 0.09), rgba(178, 61, 52, 0) 72%); }
 
 .highlight-row {
     background: var(--accent-soft);
@@ -1733,4 +1827,208 @@ header,
     .nav-btn {
         min-width: unset;
     }
+}
+
+/* Light mode: header controls sit on the warm gradient, so they need a solid
+   chip and a real edge to stay legible. */
+:root[data-theme="light"] .action-btn {
+    background: #FFFFFF;
+    border-color: rgba(23, 26, 33, 0.26);
+    color: var(--text-primary);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(23, 26, 33, 0.10);
+}
+
+:root[data-theme="light"] .action-btn:hover {
+    background: #FFFFFF;
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 2px 6px rgba(23, 26, 33, 0.14);
+}
+
+:root[data-theme="light"] .nav-btn {
+    color: #3E4652;
+    font-weight: 500;
+}
+
+:root[data-theme="light"] .nav-btn:hover {
+    color: var(--text-primary);
+}
+
+:root[data-theme="light"] .nav-btn-active {
+    color: var(--text-primary);
+    font-weight: 600;
+    background: var(--accent-soft);
+}
+
+:root[data-theme="light"] .nav-btn-active .nav-text {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+:root[data-theme="light"] .subtitle {
+    color: #3E4652;
+}
+
+/* ==========================================================================
+   LIGHT MODE — INTERACTIVE CHIP
+   Anything you can click or type into gets the same treatment: a solid white
+   chip with a real edge and a hairline shadow, so controls read as raised
+   against the warm canvas instead of dissolving into it.
+   ========================================================================== */
+
+:root[data-theme="light"] .config-item input,
+:root[data-theme="light"] .config-item select,
+:root[data-theme="light"] input[type="text"],
+:root[data-theme="light"] input[type="number"],
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea,
+:root[data-theme="light"] .segmented,
+:root[data-theme="light"] .upload-area,
+:root[data-theme="light"] details.collapsible-section,
+:root[data-theme="light"] .btn-secondary {
+    background-color: #FFFFFF;
+    border-color: rgba(23, 26, 33, 0.26);
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(23, 26, 33, 0.10);
+}
+
+:root[data-theme="light"] .config-item input:hover,
+:root[data-theme="light"] .config-item select:hover,
+:root[data-theme="light"] input[type="text"]:hover,
+:root[data-theme="light"] input[type="number"]:hover,
+:root[data-theme="light"] select:hover,
+:root[data-theme="light"] .btn-secondary:hover {
+    border-color: rgba(23, 26, 33, 0.40);
+    box-shadow: 0 2px 6px rgba(23, 26, 33, 0.13);
+}
+
+:root[data-theme="light"] .config-item input:focus,
+:root[data-theme="light"] .config-item select:focus,
+:root[data-theme="light"] input[type="text"]:focus,
+:root[data-theme="light"] input[type="number"]:focus,
+:root[data-theme="light"] select:focus,
+:root[data-theme="light"] textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft), 0 1px 2px rgba(23, 26, 33, 0.10);
+    outline: none;
+}
+
+/* The dashed drop target still reads as a target, just on a white chip. */
+:root[data-theme="light"] .upload-area {
+    border-style: dashed;
+    border-color: rgba(23, 26, 33, 0.30);
+}
+
+:root[data-theme="light"] .upload-area:hover,
+:root[data-theme="light"] .upload-area.dragover {
+    border-color: var(--accent);
+    background-color: #FFFFFF;
+    box-shadow: 0 2px 10px rgba(23, 26, 33, 0.14);
+}
+
+/* Collapsible headers are clickable, so the whole chip lifts on hover. */
+:root[data-theme="light"] details.collapsible-section:hover {
+    border-color: rgba(23, 26, 33, 0.34);
+    box-shadow: 0 2px 6px rgba(23, 26, 33, 0.13);
+}
+
+/* Segmented track stays recessed; the selected chip is the white one. */
+:root[data-theme="light"] .segmented {
+    background-color: #F1EFEA;
+    box-shadow: inset 0 1px 2px rgba(23, 26, 33, 0.06);
+}
+
+/* Range slider: white thumb with a real edge so it reads as grabbable. */
+:root[data-theme="light"] input[type="range"] {
+    accent-color: var(--accent);
+}
+
+:root[data-theme="light"] input[type="range"]::-webkit-slider-thumb {
+    background: #FFFFFF;
+    border: 1px solid rgba(23, 26, 33, 0.34);
+    box-shadow: 0 1px 3px rgba(23, 26, 33, 0.22);
+}
+
+:root[data-theme="light"] .toggle-slider {
+    background-color: #E7E4DD;
+    border: 1px solid rgba(23, 26, 33, 0.20);
+}
+
+:root[data-theme="light"] .toggle-slider:before {
+    background-color: #FFFFFF;
+    box-shadow: 0 1px 3px rgba(23, 26, 33, 0.24);
+}
+
+/* Tooltip copy always renders as bullets so it can be scanned, not read. */
+.tip-text .tip-list {
+    margin: 0;
+    padding-left: 1.05rem;
+    list-style: disc;
+    text-align: left;
+}
+
+.tip-text .tip-list li {
+    margin: 0 0 0.35rem;
+    padding: 0;
+    line-height: 1.45;
+}
+
+.tip-text .tip-list li:last-child {
+    margin-bottom: 0;
+}
+
+/* Benchmark mode adds a delta chip to several columns, which pushes the ROI
+   column past the edge. Reclaim the width from the sparkline and the padding. */
+.insights-host table.bench-on {
+    table-layout: auto;
+    width: 100%;
+}
+
+.insights-host table.bench-on th,
+.insights-host table.bench-on td {
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+}
+
+.insights-host table.bench-on th:last-child,
+.insights-host table.bench-on td:last-child {
+    padding-right: 0.85rem;
+    white-space: nowrap;
+}
+
+.insights-host table.bench-on .js-spark,
+.insights-host table.bench-on .spark-cell {
+    width: 84px;
+    max-width: 84px;
+}
+
+.insights-host table.bench-on .spark-cell svg {
+    width: 84px;
+    height: auto;
+}
+
+/* Tooltips are injected inside label rows that set white-space:nowrap, so the
+   bubble inherits it and its text runs past the edge. Force wrapping here. */
+.info-tip .tip-text,
+.info-tip .tip-text * {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    text-overflow: clip;
+}
+
+.info-tip .tip-text {
+    width: max-content;
+    max-width: 300px;
+    box-sizing: border-box;
+}
+
+/* Parse overlay: painted before the blocking CSV parse so the page never looks frozen. */
+#parseLoadingOverlay {
+    background: rgba(10, 12, 16, 0.93);
+}
+
+:root[data-theme="light"] #parseLoadingOverlay {
+    background: rgba(255, 253, 251, 0.94);
 }

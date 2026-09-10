@@ -4,7 +4,25 @@ let resultsDisplayed = false;
 let originalMinutesPerAction = null; // stores the user's default choice at first calculation
 let isDemoData = false; // tracks whether current data is demo or customer upload
 // Tooltip helper — returns inline HTML for a hover ? icon with explanation
-const tip = (text) => `<span class="info-tip"><span class="info-icon">?</span><span class="tip-text">${text}</span></span>`;
+// Tooltip copy is written as prose but always renders as bullets. Split on sentence
+// ends only when a capital follows, so "3.7x" and "$1." stay intact. An explicit "|"
+// wins if the caller wants to control the breaks. Lookbehind is avoided for Safari.
+const tipBullets = (text) => {
+    const raw = String(text == null ? '' : text).trim();
+    const parts = (raw.indexOf('|') !== -1
+        ? raw.split('|')
+        : raw.replace(/([a-z0-9%)\]"'’])\.\s+(?=[A-Z])/g, '$1\u0000').split('\u0000'))
+        .map(s => s.trim().replace(/\s*\.\s*$/, ''))
+        .filter(Boolean);
+    return parts;
+};
+const tip = (text) => {
+    const parts = tipBullets(text);
+    const body = parts.length > 1
+        ? `<ul class="tip-list">${parts.map(p => `<li>${p}</li>`).join('')}</ul>`
+        : `<ul class="tip-list"><li>${parts[0] || ''}</li></ul>`;
+    return `<span class="info-tip"><span class="info-icon">?</span><span class="tip-text">${body}</span></span>`;
+};
 // Collapsible section wrapper — renders as <details open> so user can collapse before PDF export
 const section = (title, content, extraClass = '') => `
 <details open class="collapsible-section ${extraClass}">
@@ -161,31 +179,75 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Parsing a large export blocks the main thread for many seconds, so the overlay
+// has to be painted BEFORE the work starts — two rAFs guarantee a frame lands first.
+function showParseOverlay(file) {
+    hideParseOverlay();
+    const mb = file && file.size ? file.size / 1048576 : 0;
+    const scale = mb > 25 ? 'This is a large export, so it may take up to a minute.'
+        : mb > 5 ? 'This should take a few seconds.'
+        : 'This should only take a moment.';
+    const overlay = document.createElement('div');
+    overlay.id = 'parseLoadingOverlay';
+    overlay.setAttribute('role', 'status');
+    overlay.setAttribute('aria-live', 'polite');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;' +
+        'align-items:center;justify-content:center;text-align:center;padding:2rem;' +
+        'backdrop-filter:blur(2px);';
+    overlay.innerHTML =
+        '<div class="loading-spinner"></div>' +
+        '<p style="margin:0.25rem 0 0;font-family:var(--font-display);font-size:1.35rem;color:var(--text-primary);">Reading your data</p>' +
+        '<p style="margin:0.6rem 0 0;font-size:0.9375rem;color:var(--text-secondary);max-width:34ch;line-height:1.5;">' +
+        scale + ' Everything is processed in your browser, so nothing is uploaded.</p>' +
+        (mb ? '<p style="margin:0.75rem 0 0;font-size:0.8125rem;color:var(--text-tertiary);">' + mb.toFixed(1) + ' MB</p>' : '');
+    document.body.appendChild(overlay);
+}
+
+function hideParseOverlay() {
+    const el = document.getElementById('parseLoadingOverlay');
+    if (el) el.remove();
+}
+
+// Resolves after the browser has actually painted, not just after a timer fires.
+function afterPaint(fn) {
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(fn, 0)));
+}
+
 // Handle file upload
 function handleFile(file) {
-    if (!file.name.endsWith('.csv')) {
+    // Viva Insights exports arrive as ".Csv", so the extension check must be case-insensitive.
+    if (!/\.csv$/i.test(file.name)) {
         showError('Please upload a CSV file');
         return;
     }
 
+    showParseOverlay(file);
+
     const reader = new FileReader();
+    const readStartedAt = Date.now();
     reader.onload = (e) => {
-        try {
-            const csvData = e.target.result;
-            uploadedData = parseCSV(csvData);
-            config.analysisWeeks = uploadedData.detectedWeeks || 26;
-            isDemoData = false; // Mark as customer upload
-            if (window.InsightsShared) window.InsightsShared.saveSharedData(uploadedData, config);
-            showFilePreview(file.name, uploadedData);
-        } catch (error) {
-            if (error && error.code === 'UNSUPPORTED_FORMAT') {
-                showUnsupportedFormatError(!!error.looksLikeHeatmap);
-            } else {
-                showError('Error processing file: ' + error.message);
+        const csvData = e.target.result;
+        afterPaint(() => {
+            try {
+                uploadedData = parseCSV(csvData);
+                config.analysisWeeks = uploadedData.detectedWeeks || 26;
+                isDemoData = false; // Mark as customer upload
+                uploadedData.loadSeconds = (Date.now() - readStartedAt) / 1000;
+                if (window.InsightsShared) window.InsightsShared.saveSharedData(uploadedData, config);
+                showFilePreview(file.name, uploadedData);
+            } catch (error) {
+                if (error && error.code === 'UNSUPPORTED_FORMAT') {
+                    showUnsupportedFormatError(!!error.looksLikeHeatmap);
+                } else {
+                    showError('Error processing file: ' + error.message);
+                }
+            } finally {
+                hideParseOverlay();
             }
-        }
+        });
     };
     reader.onerror = () => {
+        hideParseOverlay();
         showError('Error reading file');
     };
     reader.readAsText(file);
@@ -195,7 +257,8 @@ function handleFile(file) {
 // Skips fetch, skips DOM input writes, goes straight to renderResults().
 function loadDemoReportInstant(csvText) {
     try {
-        config.totalPurchasedLicenses = 8000;
+        // 350 purchased seats against the 300 distinct people in viva-demo-data.csv (~86% assignment).
+        config.totalPurchasedLicenses = 350;
         config.licenseCost = 30;
         config.minutesPerAction = 6;
         config.professionalRate = 78;
@@ -241,14 +304,15 @@ async function loadDemoReport() {
         const csvData = await response.text();
 
         // Pre-configure settings
-        config.totalPurchasedLicenses = 8000;
+        // 350 purchased seats against the 300 distinct people in viva-demo-data.csv (~86% assignment).
+        config.totalPurchasedLicenses = 350;
         config.licenseCost = 30;
         config.minutesPerAction = 6;
         config.professionalRate = 78;
         config.intelligentRecapActions = 0;
 
         // Update UI inputs
-        document.getElementById('totalPurchasedLicenses').value = 8000;
+        document.getElementById('totalPurchasedLicenses').value = 350;
         document.getElementById('licensesCost').value = 30;
         document.getElementById('minutesPerAction').value = 6;
         document.getElementById('professionalRate').value = 78;
@@ -280,12 +344,52 @@ async function loadDemoReport() {
     }
 }
 
+// Agree a count with its grouping label. The label is whatever column the user
+// grouped by ("Organization", "FunctionType", "Region", a custom attribute, or
+// the "teams" fallback), so it has to be singularised as well as pluralised.
+function formatGroupCount(count, label) {
+    const raw = String(label == null ? '' : label).trim() || 'teams';
+    // Anything not ending in a letter (codes, IDs with punctuation) reads badly
+    // with an appended "s" — fall back to a neutral construction.
+    if (!/[A-Za-z]$/.test(raw)) return `${count} groups (${raw})`;
+    if (count === 1) {
+        if (/ies$/i.test(raw)) return `1 ${raw.slice(0, -3)}y`;
+        if (/(ches|shes|xes|zes|sses)$/i.test(raw)) return `1 ${raw.slice(0, -2)}`;
+        if (/ss$/i.test(raw)) return `1 ${raw}`;
+        if (/s$/i.test(raw)) return `1 ${raw.slice(0, -1)}`;
+        return `1 ${raw}`;
+    }
+    if (/(s|x|z|ch|sh)$/i.test(raw)) {
+        return /s$/i.test(raw) ? `${count} ${raw}` : `${count} ${raw}es`;
+    }
+    if (/[^aeiouAEIOU]y$/.test(raw)) return `${count} ${raw.slice(0, -1)}ies`;
+    return `${count} ${raw}s`;
+}
+
 // Show file preview with Calculate button
 function showFilePreview(fileName, data) {
     const rows = data.rows;
     const totalUsers = rows.reduce((s, r) => s + r.enabledUsers, 0);
     const totalWeeklyActions = rows.reduce((s, r) => s + r.weeklyActions, 0);
     const groupLabel = data.groupLabel || 'teams';
+
+    // Reading is the slow part; calculating is far quicker. Round up to a coarse
+    // bucket so the number reads as an expectation, not a precise measurement.
+    const roundUpSeconds = (s) => {
+        if (s <= 3) return 'a few seconds';
+        if (s <= 10) return 'about 10 seconds';
+        if (s <= 20) return 'about 20 seconds';
+        if (s <= 30) return 'about 30 seconds';
+        return 'about ' + (Math.ceil(s / 30) * 30 / 60 >= 1
+            ? Math.ceil(s / 30) / 2 + ' minutes'
+            : Math.ceil(s / 30) * 30 + ' seconds');
+    };
+    const loadNote = data.loadSeconds
+        ? `<div style="margin-top:1rem; font-size:0.875rem; color:var(--text-secondary);">
+               This file took <strong>${roundUpSeconds(data.loadSeconds)}</strong> to read.
+               Calculating is quicker &mdash; the report will appear on its own once it is done.
+           </div>`
+        : '';
 
     // ---- Grouping picker (Viva Insights only) ----
     // Customers commonly want to cut data by something other than Organization (Team, Division,
@@ -342,15 +446,14 @@ function showFilePreview(fileName, data) {
             </div>
 
             <div style="display: flex; gap: 1rem; align-items: center;">
-                <button type="button" onclick="runCalculation()" style="flex: 1; padding: 0.875rem 1rem; font-size: 0.9375rem; font-weight: 600; background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: 8px; cursor: pointer; transition: background-color 0.18s ease; font-family: inherit;"
-                    onmouseover="this.style.background='var(--accent-hover)';"
-                    onmouseout="this.style.background='';">
+                <button type="button" class="btn-primary" onclick="runCalculation()" style="flex: 1;">
                     Calculate Productivity ROI
                 </button>
-                <button type="button" onclick="location.reload()" style="padding: 0.875rem 1.25rem; font-size: 0.875rem; font-weight: 500; background: transparent; color: var(--text-secondary); border: 1px solid var(--rule); border-radius: 8px; cursor: pointer; font-family: inherit;">
+                <button type="button" class="btn-secondary" onclick="location.reload()">
                     Reset
                 </button>
             </div>
+            ${loadNote}
         </div>
     `;
 
@@ -564,6 +667,8 @@ function parseVivaInsights(lines, headers) {
         const lo = h.trim().toLowerCase();
         if (SKIP_GROUPING.has(lo)) return;
         if (METRIC_PATTERN.test(lo)) return;
+        // "IsActiveInX" columns are boolean feature flags, not demographic cuts.
+        if (/^isactivein/.test(lo)) return;
         groupingCandidateIdx.push({ idx, name: h.trim() });
     });
     // Per-candidate-per-person value collection (latest non-blank wins, same convention as org).
@@ -670,8 +775,12 @@ function parseVivaInsights(lines, headers) {
         const dist = groupingDistinct[c.name];
         const distinctVals = Object.keys(dist);
         if (distinctVals.length < 2 || distinctVals.length > 500) return;
-        const minPersonsPerValue = distinctVals.reduce((min, v) => Math.min(min, dist[v].size), Infinity);
-        if (minPersonsPerValue < 2) return;
+        // A real demographic column can legitimately contain one-person groups (a lone
+        // director, a new team). Only reject columns that behave like unique IDs, i.e.
+        // fewer than two values that group more than one person. The "Organization
+        // (Aggregated)" rule below still rolls sub-5-person groups into "Other".
+        const groupedVals = distinctVals.filter(v => dist[v].size >= 2).length;
+        if (groupedVals < 2) return;
         // Coverage: how many persons have ANY value here
         const coverage = distinctVals.reduce((s, v) => s + dist[v].size, 0) / totalPersons;
         if (coverage < 0.5) return; // skip columns that are mostly blank
@@ -1089,10 +1198,18 @@ function buildTierTableBodyHTML(cohorts, sortedTeams, metrics, licenseCost) {
             'Low Users':      'var(--copilot-orange)',
             'Non Users':      'var(--red)'
         };
+        const tintByName = {
+            'Power Users':    'cohort-row cohort-row--power',
+            'Habitual Users': 'cohort-row cohort-row--habitual',
+            'Novice Users':   'cohort-row cohort-row--novice',
+            'Low Users':      'cohort-row cohort-row--low',
+            'Non Users':      'cohort-row cohort-row--non'
+        };
         let html = '';
         cohorts.rows.forEach(r => {
             const color = colorByName[r.name] || 'var(--text-primary)';
-            html += `<tr>
+            const tintClass = tintByName[r.name] || 'cohort-row';
+            html += `<tr class="${tintClass}">
                 <td><span style="color:${color}; font-weight:700;">${r.name}</span></td>
                 <td>${r.count.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                 <td>${r.actionsPerMonth.toFixed(0)}</td>
@@ -1117,11 +1234,11 @@ function buildTierTableBodyHTML(cohorts, sortedTeams, metrics, licenseCost) {
     const byActions = [...sortedTeams].sort((a, b) => b.actionsPerUser - a.actionsPerUser);
     const totalTeams = byActions.length;
     const tierDefs = [
-        { name: 'Top 10%',    color: 'var(--green)',          start: 0,                                                  end: Math.max(1, Math.round(totalTeams * 0.10)) },
-        { name: '75-90%',     color: 'var(--copilot-cyan)',   start: Math.max(1, Math.round(totalTeams * 0.10)),         end: Math.round(totalTeams * 0.25) },
-        { name: '50-75%',     color: 'var(--copilot-blue)',   start: Math.round(totalTeams * 0.25),                      end: Math.round(totalTeams * 0.50) },
-        { name: '25-50%',     color: 'var(--copilot-orange)', start: Math.round(totalTeams * 0.50),                      end: Math.round(totalTeams * 0.75) },
-        { name: 'Bottom 25%', color: 'var(--red)',            start: Math.round(totalTeams * 0.75),                      end: totalTeams },
+        { name: 'Top 10%',    color: 'var(--green)',          cls: 'cohort-row--power',    start: 0,                                                  end: Math.max(1, Math.round(totalTeams * 0.10)) },
+        { name: '75-90%',     color: 'var(--copilot-cyan)',   cls: 'cohort-row--habitual', start: Math.max(1, Math.round(totalTeams * 0.10)),         end: Math.round(totalTeams * 0.25) },
+        { name: '50-75%',     color: 'var(--copilot-blue)',   cls: 'cohort-row--novice',   start: Math.round(totalTeams * 0.25),                      end: Math.round(totalTeams * 0.50) },
+        { name: '25-50%',     color: 'var(--copilot-orange)', cls: 'cohort-row--low',      start: Math.round(totalTeams * 0.50),                      end: Math.round(totalTeams * 0.75) },
+        { name: 'Bottom 25%', color: 'var(--red)',            cls: 'cohort-row--non',      start: Math.round(totalTeams * 0.75),                      end: totalTeams },
     ];
     let totalActiveInTiers = 0;
     let totalValueInTiers = 0;
@@ -1138,7 +1255,7 @@ function buildTierTableBodyHTML(cohorts, sortedTeams, metrics, licenseCost) {
         const tierRoi = tierInvestment > 0 ? (tierMonthlyVal / tierInvestment) : 0;
         totalActiveInTiers += tierUsers;
         totalValueInTiers += tierMonthlyVal;
-        html += `<tr>
+        html += `<tr class="cohort-row ${tier.cls}">
             <td><span style="color:${tier.color}; font-weight:700;">${tier.name}</span></td>
             <td>${tierUsers.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
             <td>${tierMonthly.toFixed(0)}</td>
@@ -1741,8 +1858,9 @@ function switchTimePeriod(period) {
     const teams = computeTeamsForPeriod(period);
     if (!teams) return;
 
-    // Update active button state
-    document.querySelectorAll('.time-toggle-btn').forEach(btn => {
+    // Update active button state. Scoped to [data-period] — the minutes-per-action
+    // presets share .time-toggle-btn and must keep their own selected state.
+    document.querySelectorAll('.time-toggle-btn[data-period]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.period === period);
     });
 
@@ -2096,12 +2214,12 @@ function buildProjectionTables(metrics, sortedTeams) {
                     <div class="metric-sublabel" id="opp-value-math"></div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Net Gain / Mo ${tip('Potential value minus licensing cost. Green means the productivity gained exceeds the cost of licenses.')}</span></div>
+                    <div class="metric-label"><span class="metric-label-row"><span id="opp-net-label">Net Gain / Mo</span> ${tip('Potential value minus licensing cost. Green means the productivity gained exceeds the cost of licenses.')}</span></div>
                     <div class="metric-value" id="opp-net-gain">—</div>
                     <div class="metric-sublabel" id="opp-net-math"></div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label"><span class="metric-label-row">Annual Opportunity ${tip('Net monthly gain × 12. This is the additional value your organization could unlock each year by bringing these users onto Copilot.')}</span></div>
+                    <div class="metric-label"><span class="metric-label-row"><span id="opp-annual-label">Annual Opportunity</span> ${tip('Net monthly gain × 12. This is the additional value your organization could unlock each year by bringing these users onto Copilot.')}</span></div>
                     <div class="metric-value" id="opp-annual">—</div>
                     <div class="metric-sublabel" id="opp-annual-math"></div>
                 </div>
@@ -2156,9 +2274,11 @@ function updateOppCost() {
         document.getElementById('opp-value-label').textContent = 'Potential Value / Mo';
         document.getElementById('opp-potential-value').textContent = '$' + fmt(potentialValue);
         document.getElementById('opp-value-math').textContent = fmt(count) + ' × $' + fmt(Math.round(p.valuePerUser)) + '/user/mo';
+        document.getElementById('opp-net-label').textContent = 'Net Gain / Mo';
         document.getElementById('opp-net-gain').textContent = '$' + fmt(netGain);
         document.getElementById('opp-net-gain').style.color = netGain >= 0 ? 'var(--green)' : 'var(--red)';
         document.getElementById('opp-net-math').textContent = '$' + fmt(potentialValue) + ' − $' + fmt(licensingCost);
+        document.getElementById('opp-annual-label').textContent = 'Annual Opportunity';
         document.getElementById('opp-annual').textContent = '$' + fmt(annual);
         document.getElementById('opp-annual').style.color = annual >= 0 ? 'var(--green)' : 'var(--red)';
         document.getElementById('opp-annual-math').textContent = '$' + fmt(netGain) + ' × 12 months';
@@ -2166,12 +2286,14 @@ function updateOppCost() {
         document.getElementById('opp-value-label').textContent = 'Total Actions / Mo';
         document.getElementById('opp-potential-value').textContent = fmt(totalActions);
         document.getElementById('opp-value-math').textContent = fmt(count) + ' × ' + fmt(Math.round(p.actionsPerUser)) + ' actions/user';
-        document.getElementById('opp-net-gain').textContent = fmt(Math.round(p.actionsPerUser)) + '/user';
+        document.getElementById('opp-net-label').textContent = 'Actions / User / Mo';
+        document.getElementById('opp-net-gain').textContent = fmt(Math.round(p.actionsPerUser)) + ' actions';
         document.getElementById('opp-net-gain').style.color = '';
-        document.getElementById('opp-net-math').textContent = '10% of ' + fmt(Math.round(p.avgMonthly)) + ' avg actions';
-        document.getElementById('opp-annual').textContent = fmt(totalActions * 12) + '/yr';
+        document.getElementById('opp-net-math').textContent = '10% of ' + fmt(Math.round(p.avgMonthly)) + ' avg actions/user';
+        document.getElementById('opp-annual-label').textContent = 'Annual Actions';
+        document.getElementById('opp-annual').textContent = fmt(totalActions * 12) + ' actions';
         document.getElementById('opp-annual').style.color = '';
-        document.getElementById('opp-annual-math').textContent = fmt(totalActions) + ' × 12 months';
+        document.getElementById('opp-annual-math').textContent = fmt(totalActions) + ' actions/mo × 12 months';
     }
 }
 
@@ -2198,7 +2320,7 @@ function buildMpaToggleButtons() {
         const isActive = config.minutesPerAction === val && !isCustom;
         const isDefault = val === originalMinutesPerAction;
         const label = `${val} min` + (isDefault ? ' (your default)' : '');
-        return `<button class="time-toggle-btn${isActive ? ' active' : ''}" onclick="switchMinutesPerAction(${val})">${label}</button>`;
+        return `<button class="time-toggle-btn mpa-preset-btn${isActive ? ' active' : ''}" data-mpa="${val}" aria-pressed="${isActive}" onclick="switchMinutesPerAction(${val})">${label}</button>`;
     }).join('');
 
     const customActiveStyle = isCustom
@@ -2369,7 +2491,7 @@ function renderResults() {
             ` : ''}
             <header>
                 <h1>M365 Copilot Productivity ROI Analysis Results</h1>
-                <p class="subtitle">Based on ${rows.length} ${uploadedData.groupLabel || 'teams'} • ${config.analysisWeeks} weeks of data${uploadedData.dateRange ? ` (${uploadedData.dateRange})` : ''}</p>
+                <p class="subtitle">Based on ${formatGroupCount(rows.length, uploadedData.groupLabel)} • ${config.analysisWeeks} weeks of data${uploadedData.dateRange ? ` (${uploadedData.dateRange})` : ''}</p>
                 <p style="margin-top: 0.5rem;"><a href="https://aka.ms/Analytics-Hub" target="_blank" style="color: var(--accent); font-weight: 500; text-decoration: none; font-size: 0.875rem;">View more reports on the Analytics Hub &rarr;</a></p>
             </header>
 
@@ -3743,7 +3865,7 @@ async function exportExecutiveDeck() {
             x: 0.70, y: 4.20, w: 11.0, h: 0.80, fontSize: 20, fontFace: 'Calibri', color: WHITE
         });
         // Data context
-        s1.addText(`Based on ${rows.length} ${groupLabel}  \u2022  ${weeks} weeks of data  \u2022  ${dateRange}`, {
+        s1.addText(`Based on ${formatGroupCount(rows.length, groupLabel)}  \u2022  ${weeks} weeks of data  \u2022  ${dateRange}`, {
             x: 0.70, y: 5.20, w: 11.0, h: 0.40, fontSize: 13, fontFace: 'Calibri', color: MUTED
         });
         // Footer bar

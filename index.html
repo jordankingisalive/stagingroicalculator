@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>M365 Copilot Productivity ROI Calculator</title>
     <script>(function(){try{var t=localStorage.getItem('cri_theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
-    <link rel="stylesheet" href="styles.css?v=45">
+    <link rel="stylesheet" href="styles.css?v=56">
     
     <!-- Microsoft Clarity Analytics -->
     <script type="text/javascript">
@@ -189,7 +189,9 @@
                         <p>Select your exported CSV file below. Your CSV is parsed entirely in your browser - the file and its contents are never uploaded.</p>
 
                         <div class="info-box" style="margin-bottom: 1rem;">
-                            <strong>Set your configuration first.</strong> Adjust your Industry, License Cost, Hourly Rate, and Minutes Saved in Step 2 above before uploading your file. After uploading, click the <strong>Calculate Productivity ROI</strong> button to generate your report.
+                            <strong>Set your configuration first.</strong> Adjust your Industry, License Cost, Hourly Rate, and Minutes Saved in Step 2 above before uploading your file.
+                            <br><br>
+                            <strong>Dropping the file is not the last step.</strong> Once it is loaded, click <strong>Calculate Productivity ROI</strong> to build your report. Larger exports hold a lot of history, so give it a few seconds to work through every person and week &mdash; your results will appear as soon as it finishes.
                         </div>
 
                         <div class="upload-area" id="uploadArea">
@@ -242,15 +244,15 @@
         </footer>
     </div>
 
-    <script src="lib/jspdf.umd.min.js?v=45"></script>
-    <script src="lib/html2canvas.min.js?v=45"></script>
-    <script src="lib/docx.umd.js?v=45"></script>
-    <script src="lib/pptxgen.bundle.js?v=45"></script>
-    <script src="lib/jszip.min.js?v=45"></script>
-    <script src="insights-shared.js?v=45"></script>
-    <script src="insights-tabs.js?v=45"></script>
-    <script src="header-mapping.js?v=45"></script>
-    <script src="script.js?v=45"></script>
+    <script src="lib/jspdf.umd.min.js?v=56"></script>
+    <script src="lib/html2canvas.min.js?v=56"></script>
+    <script src="lib/docx.umd.js?v=56"></script>
+    <script src="lib/pptxgen.bundle.js?v=56"></script>
+    <script src="lib/jszip.min.js?v=56"></script>
+    <script src="insights-shared.js?v=56"></script>
+    <script src="insights-tabs.js?v=56"></script>
+    <script src="header-mapping.js?v=56"></script>
+    <script src="script.js?v=56"></script>
     <script>
         function emailReport() {
             const subject = encodeURIComponent('M365 Copilot Productivity ROI Analysis');

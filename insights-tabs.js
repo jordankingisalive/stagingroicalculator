@@ -62,6 +62,18 @@
         .insights-host .controls { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
         .insights-host .controls input, .insights-host .controls select { background: var(--surface-raised, #253449); border: 1px solid var(--border, rgba(255,255,255,0.08)); color: var(--text-primary, #F1F5F9); padding: 0.5rem 0.85rem; border-radius: 8px; font-size: 0.9rem; }
         .insights-host .controls label { color: var(--text-secondary, #94A3B8); font-size: 0.85rem; }
+        /* Organizations — benchmark toggle (chip styled to match .segmented) */
+        .insights-host .controls .bench-seg { display: inline-flex; align-items: center; gap: 2px; padding: 3px; background: var(--ink-600, #253449); border: 1px solid var(--rule, rgba(255,255,255,0.08)); border-radius: 8px; }
+        .insights-host .controls .bench-chip { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0; padding: 0.4375rem 0.875rem; border: 1px solid transparent; border-radius: 6px; font-size: 0.8125rem; font-weight: 500; line-height: 1.2; color: var(--text-secondary, #94A3B8); cursor: pointer; white-space: nowrap; transition: background-color 0.16s ease, color 0.16s ease; }
+        .insights-host .controls .bench-chip:hover { color: var(--text-primary, #F1F5F9); }
+        .insights-host .controls .bench-chip:focus-within { box-shadow: 0 0 0 3px var(--accent-soft); }
+        .insights-host .controls .bench-chip.active { background: var(--surface, #1E293B); color: var(--text-primary, #F1F5F9); font-weight: 600; border-color: var(--accent); }
+        .insights-host .controls .bench-chip input[type=checkbox] { width: 14px; height: 14px; margin: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
+        :root[data-theme="light"] .insights-host .controls .bench-seg { background: #F1EFEA; box-shadow: inset 0 1px 2px rgba(23,26,33,0.06); }
+        :root[data-theme="light"] .insights-host .controls .bench-chip.active { background: #FFFFFF; box-shadow: 0 1px 2px var(--shadow, rgba(23,26,33,0.12)); }
+        .insights-host .bench-delta { display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border-radius: 999px; background: var(--accent-soft); font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .insights-host .org-table tr.bench-avg-row td { background: var(--accent-soft); font-weight: 700; border-bottom: 2px solid var(--accent); }
+        .insights-host .org-table tr.bench-avg-row .sub { display: block; font-size: 0.72rem; font-weight: 500; color: var(--text-secondary, #94A3B8); }
         /* Apps */
         .insights-host .behavior-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
         .insights-host .behavior-card { background: var(--surface-raised, #253449); border-radius: 12px; padding: 1.25rem; border-top: 3px solid; }
@@ -198,6 +210,55 @@
     // ─────────────────────────────────────────────────────────────────────────
     // 2. Organizations — sortable, expandable org-level breakdown
     // ─────────────────────────────────────────────────────────────────────────
+    const BENCH_KEY = 'cri.orgs.benchmark';
+    const readBench = () => { try { return sessionStorage.getItem(BENCH_KEY) === '1'; } catch (e) { return false; } };
+    const writeBench = v => { try { sessionStorage.setItem(BENCH_KEY, v ? '1' : '0'); } catch (e) { /* private mode */ } };
+
+    // Single code path for every metric in the Organizations table. Called once per
+    // group AND once over the whole population, so the benchmark row is a true
+    // population aggregate rather than an unweighted mean of the per-group numbers.
+    function computeGroupMetrics(persons, sortedDates, cfg) {
+        const userCount = persons.length;
+        const weeklyAvg = sortedDates.map(d => {
+            let withActions = 0, sumActions = 0;
+            persons.forEach(({ p }) => {
+                const wk = p.weeks.find(w => w.d === d);
+                if (wk && wk.a > 0) { withActions += 1; sumActions += wk.a; }
+            });
+            return withActions > 0 ? sumActions / withActions : 0;
+        });
+        const cohortCounts = { 'Power Users': 0, 'Habitual Users': 0, 'Novice Users': 0, 'Low Users': 0, 'Non Users': 0 };
+        persons.forEach(({ p }) => {
+            const last = p.weeks[p.weeks.length - 1];
+            if (!last) return;
+            const t = last.threshold || 'Non Users';
+            cohortCounts[t] = (cohortCounts[t] || 0) + 1;
+        });
+        const habitOrPower = cohortCounts['Power Users'] + cohortCounts['Habitual Users'];
+        const habitPct = userCount > 0 ? (habitOrPower / userCount) * 100 : 0;
+        const groupCohorts = IS.computeCohorts(
+            Object.fromEntries(persons.map(({ pid, p }) => [pid, p])),
+            sortedDates,
+            cfg
+        );
+        const n = weeklyAvg.length;
+        const recent4 = weeklyAvg.slice(Math.max(0, n - 4));
+        const prior4 = weeklyAvg.slice(Math.max(0, n - 8), Math.max(0, n - 4));
+        const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+        const recentAvg = avg(recent4);
+        const priorAvg = avg(prior4);
+        const trendPct = priorAvg > 0 ? ((recentAvg - priorAvg) / priorAvg) * 100 : 0;
+        const monthlyValue = groupCohorts.totals.monthlyValue;
+        return {
+            userCount, weeklyAvg, cohortCounts, habitOrPower, habitPct,
+            monthlyValue,
+            monthlyValuePerUser: userCount > 0 ? monthlyValue / userCount : 0,
+            roi: groupCohorts.totals.roi,
+            avgActionsPerUserWeek: recentAvg,
+            trendPct
+        };
+    }
+
     function renderOrgs(main, data) {
         const personIndex = data.personIndex;
         const sortedDates = data.sortedDates;
@@ -210,47 +271,17 @@
             byOrg[o].push({ pid, p });
         });
 
-        const orgs = Object.entries(byOrg).map(([orgName, persons]) => {
-            const userCount = persons.length;
-            const weeklyAvg = sortedDates.map(d => {
-                let withActions = 0, sumActions = 0;
-                persons.forEach(({ p }) => {
-                    const wk = p.weeks.find(w => w.d === d);
-                    if (wk && wk.a > 0) { withActions += 1; sumActions += wk.a; }
-                });
-                return withActions > 0 ? sumActions / withActions : 0;
-            });
-            const cohortCounts = { 'Power Users': 0, 'Habitual Users': 0, 'Novice Users': 0, 'Low Users': 0, 'Non Users': 0 };
-            persons.forEach(({ p }) => {
-                const last = p.weeks[p.weeks.length - 1];
-                if (!last) return;
-                const t = last.threshold || 'Non Users';
-                cohortCounts[t] = (cohortCounts[t] || 0) + 1;
-            });
-            const habitOrPower = cohortCounts['Power Users'] + cohortCounts['Habitual Users'];
-            const habitPct = userCount > 0 ? (habitOrPower / userCount) * 100 : 0;
-            const orgCohorts = IS.computeCohorts(
-                Object.fromEntries(persons.map(({ pid, p }) => [pid, p])),
-                sortedDates,
-                cfg
-            );
-            const n = weeklyAvg.length;
-            const recent4 = weeklyAvg.slice(Math.max(0, n - 4));
-            const prior4 = weeklyAvg.slice(Math.max(0, n - 8), Math.max(0, n - 4));
-            const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
-            const recentAvg = avg(recent4);
-            const priorAvg = avg(prior4);
-            const trendPct = priorAvg > 0 ? ((recentAvg - priorAvg) / priorAvg) * 100 : 0;
-            return {
-                orgName, userCount, weeklyAvg, cohortCounts, habitOrPower, habitPct,
-                monthlyValue: orgCohorts.totals.monthlyValue,
-                roi: orgCohorts.totals.roi,
-                avgActionsPerUserWeek: recentAvg,
-                trendPct
-            };
-        });
+        const orgs = Object.entries(byOrg).map(([orgName, persons]) =>
+            Object.assign({ orgName }, computeGroupMetrics(persons, sortedDates, cfg)));
 
-        const state = { orgs, sortKey: 'monthlyValue', sortDir: -1 };
+        // The benchmark reference: identical computation run over every person.
+        const orgWide = computeGroupMetrics(
+            Object.entries(personIndex).map(([pid, p]) => ({ pid, p })),
+            sortedDates,
+            cfg
+        );
+
+        const state = { orgs, orgWide, sortKey: 'monthlyValue', sortDir: -1, benchmark: readBench() };
         main.__state = state;
 
         main.innerHTML = `
@@ -272,20 +303,46 @@
                         <option value="-1">High &rarr; Low</option>
                         <option value="1">Low &rarr; High</option>
                     </select>
+                    <span class="bench-seg">
+                        <label class="bench-chip${state.benchmark ? ' active' : ''}">
+                            <input type="checkbox" class="js-benchToggle"${state.benchmark ? ' checked' : ''}>
+                            <span>Benchmark against Organization</span>
+                        </label>
+                    </span>
+                    ${IS.tooltip({ label: 'Compares every row against the whole organization, not against the other rows. The reference row is the population aggregate across all persons in the upload | % Habit+Power and Avg Actions/User/Week are compared as absolute differences | Monthly Value is compared per user so a small group is not penalised for being small | ROI is compared in multiples', math: 'orgHabitPct = (all Power + all Habitual) / all persons &times; 100. orgAvgActions = same last-4-week method applied to every person. orgMonthlyValuePerUser = orgMonthlyValue / all persons. orgRoi = orgMonthlyValue / (all persons &times; licenseCost). Delta = rowValue - orgValue.' })}
                 </div>
                 <div style="overflow-x:auto;">
-                    <table class="org-table js-orgTable"><thead></thead><tbody></tbody></table>
+                    <table class="org-table js-orgTable ${state.benchmark ? 'bench-on' : ''}"><thead></thead><tbody></tbody></table>
                 </div>
-                ${IS.mathBlock({ label: 'Per-row math', formula: '% Habit+Power = (PowerUsers + HabitualUsers) / users  &times; 100\nAvg Actions/User/Week = mean over last 4 weeks of (sum(actions) / count(users with actions))\nTrend (4w)  = (recent4Avg - prior4Avg) / prior4Avg  &times; 100\nMonthly Value = &Sigma; cohort-weight &times; weekly_actions &times; minutesPerAction / 60 &times; professionalRate &times; 4.33\nROI = monthlyValue / (users &times; licenseCost)', note: 'Cohort weights reflect the Adjusted Compounding Adoption Hypothesis: Power=1.0, Habitual=0.7, Novice=0.4, Low=0.1, Non=0.' })}
+                ${IS.mathBlock({ label: 'Per-row math', formula: '% Habit+Power = (PowerUsers + HabitualUsers) / users  &times; 100\nAvg Actions/User/Week = mean over last 4 weeks of (sum(actions) / count(users with actions))\nTrend (4w)  = (recent4Avg - prior4Avg) / prior4Avg  &times; 100\nMonthly Value = &Sigma; cohort-weight &times; weekly_actions &times; minutesPerAction / 60 &times; professionalRate &times; 4.33\nROI = monthlyValue / (users &times; licenseCost)\n&mdash; Benchmark mode &mdash;\nOrganization average = the same five formulas run over ALL persons in the upload (population aggregate, not a mean of the rows)\n&Delta;% Habit+Power = row - org      (percentage points)\n&Delta;Avg Actions = row - org        (actions/user/week)\n&Delta;Monthly Value = (row/users - org/allUsers) / (org/allUsers) &times; 100   (per-user, %)\n&Delta;ROI = row - org               (multiples)', note: 'Cohort weights reflect the Adjusted Compounding Adoption Hypothesis: Power=1.0, Habitual=0.7, Novice=0.4, Low=0.1, Non=0. Benchmark mode adds no new valuation math — the reference row reuses the identical per-row computation over the full population.' })}
             </div>`;
 
         main.querySelector('.js-sortKey').addEventListener('change', e => { state.sortKey = e.target.value; renderOrgsTable(main); });
         main.querySelector('.js-sortDir').addEventListener('change', e => { state.sortDir = parseInt(e.target.value); renderOrgsTable(main); });
+        const benchEl = main.querySelector('.js-benchToggle');
+        benchEl.addEventListener('change', e => {
+            state.benchmark = e.target.checked;
+            writeBench(state.benchmark);
+            benchEl.closest('.bench-chip').classList.toggle('active', state.benchmark);
+            // Delta chips widen the row, so the table needs the tighter column rules.
+            const tbl = main.querySelector('.js-orgTable');
+            if (tbl) tbl.classList.toggle('bench-on', state.benchmark);
+            renderOrgsTable(main);
+        });
         renderOrgsTable(main);
+    }
+
+    // Delta chip: coloured against the org-wide reference, muted inside `tol`.
+    function benchChip(delta, tol, fmt) {
+        const color = delta > tol ? 'var(--positive)' : delta < -tol ? 'var(--negative)' : 'var(--text-tertiary)';
+        const sign = delta > tol ? '+' : delta < -tol ? '\u2212' : '\u00b1';
+        return `<span class="bench-delta" style="color:${color};">${sign}${fmt(Math.abs(delta))}</span>`;
     }
 
     function renderOrgsTable(main) {
         const state = main.__state;
+        const bench = !!state.benchmark;
+        const ref = state.orgWide;
         const orgs = state.orgs.slice().sort((a, b) => {
             const av = a[state.sortKey] || 0, bv = b[state.sortKey] || 0;
             return (av - bv) * state.sortDir;
@@ -303,20 +360,42 @@
                 <th class="num">ROI</th>
             </tr>`;
         const tbody = table.querySelector('tbody');
-        tbody.innerHTML = orgs.map((o, i) => {
+        let avgRow = '';
+        if (bench) {
+            const refTrendColor = ref.trendPct > 5 ? 'var(--positive)' : ref.trendPct < -5 ? 'var(--negative)' : 'var(--text-tertiary)';
+            const refTrendArrow = ref.trendPct > 5 ? '&uarr;' : ref.trendPct < -5 ? '&darr;' : '&rarr;';
+            avgRow = `
+            <tr class="bench-avg-row js-orgAvgRow">
+                <td>Organization average<span class="sub">all ${IS.fmtInt(ref.userCount)} people in this upload</span></td>
+                <td class="num">${IS.fmtInt(ref.userCount)}</td>
+                <td class="num">${IS.fmtPct(ref.habitPct, 1)}</td>
+                <td class="num">${ref.avgActionsPerUserWeek.toFixed(1)}</td>
+                <td><span style="color:${refTrendColor};font-weight:700;">${refTrendArrow} ${ref.trendPct.toFixed(0)}%</span></td>
+                <td>${IS.svgSparkline(ref.weeklyAvg, { color: ink('--accent', '#4C8DFF'), width: 120, height: 26 })}</td>
+                <td class="num">${IS.fmtMoneyShort(ref.monthlyValue)}<span class="sub">${IS.fmtMoneyShort(ref.monthlyValuePerUser)}/user</span></td>
+                <td class="num">${ref.roi.toFixed(1)}x</td>
+            </tr>`;
+        }
+        tbody.innerHTML = avgRow + orgs.map((o, i) => {
             const trendColor = o.trendPct > 5 ? 'var(--positive)' : o.trendPct < -5 ? 'var(--negative)' : 'var(--text-tertiary)';
             const trendArrow = o.trendPct > 5 ? '&uarr;' : o.trendPct < -5 ? '&darr;' : '&rarr;';
             const sparkColor = o.trendPct >= 0 ? ink('--positive', '#46B77F') : ink('--negative', '#D2685F');
+            const dValuePct = ref.monthlyValuePerUser > 0
+                ? (o.monthlyValuePerUser - ref.monthlyValuePerUser) / ref.monthlyValuePerUser * 100 : 0;
+            const habitChip   = bench ? benchChip(o.habitPct - ref.habitPct, 0.5, v => v.toFixed(1) + ' pts') : '';
+            const actionsChip = bench ? benchChip(o.avgActionsPerUserWeek - ref.avgActionsPerUserWeek, 0.1, v => v.toFixed(1)) : '';
+            const valueChip   = bench ? benchChip(dValuePct, 1, v => v.toFixed(0) + '%/user') : '';
+            const roiChip     = bench ? benchChip(o.roi - ref.roi, 0.05, v => v.toFixed(1) + 'x') : '';
             return `
             <tr class="expandable js-orgRow" data-idx="${i}">
                 <td><strong>${esc(o.orgName)}</strong></td>
                 <td class="num">${IS.fmtInt(o.userCount)}</td>
-                <td class="num">${IS.fmtPct(o.habitPct, 1)}</td>
-                <td class="num">${o.avgActionsPerUserWeek.toFixed(1)}</td>
+                <td class="num">${IS.fmtPct(o.habitPct, 1)}${habitChip}</td>
+                <td class="num">${o.avgActionsPerUserWeek.toFixed(1)}${actionsChip}</td>
                 <td><span style="color:${trendColor};font-weight:600;">${trendArrow} ${o.trendPct.toFixed(0)}%</span></td>
                 <td>${IS.svgSparkline(o.weeklyAvg, { color: sparkColor, width: 120, height: 26 })}</td>
-                <td class="num">${IS.fmtMoneyShort(o.monthlyValue)}</td>
-                <td class="num">${o.roi.toFixed(1)}x</td>
+                <td class="num">${IS.fmtMoneyShort(o.monthlyValue)}${valueChip}</td>
+                <td class="num">${o.roi.toFixed(1)}x${roiChip}</td>
             </tr>
             <tr class="js-orgDetail" data-idx="${i}" style="display:none;"><td colspan="8" style="padding:0;">
                 <div class="org-detail">
@@ -629,7 +708,7 @@
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 5. Forecast & Sensitivity — projection + adjusted-CAH slider + tornado
+    // 5. Forecast — cohort projection + adjusted-CAH slider
     // ─────────────────────────────────────────────────────────────────────────
     function renderForecast(main, data) {
         const personIndex = data.personIndex;
@@ -741,15 +820,7 @@
                 ${IS.mathBlock({ label: 'Adjusted CAH formula', formula: 'recapHours          = monthlyRecap &times; 0.5\nadjustedMonthlyValue = (monthlyAssistHrs + recapHours) &times; penalty &times; professionalRate\nadjustedRoi          = adjustedMonthlyValue / (totalUsers &times; licenseCost)', note: 'Use penalty &lt; 1 to account for the fact that not all assist hours map 1:1 to net productivity. Conservative deployments often use 0.5-0.7.' })}
             </div>`;
 
-        const tornadoCard = `
-            <div class="insights-card">
-                <h2>Sensitivity tornado ${IS.tooltip({ label: 'Shows how much the monthly value swings when each assumption is perturbed \u00b125% from your current settings.', math: 'For each variable V in {minutesPerAction, professionalRate, licenseCost}: vUp = baselineWith(V&times;1.25) - baseline. vDn = baselineWith(V&times;0.75) - baseline. Bar length proportional to |vUp| + |vDn|. Longer bar = bigger lever.' })}</h2>
-                <p class="lede">How much does monthly value swing if each assumption changes &plusmn;25% from your current settings? The longer the bar, the more that variable matters.</p>
-                <div class="js-tornadoChart"></div>
-                ${IS.mathBlock({ label: 'Sensitivity computation', formula: 'For each variable V perturbed by &plusmn;25%:\n  baseline = computeCohorts(cfg).monthlyValue\n  upDelta  = computeCohorts(cfg with V&times;1.25).monthlyValue - baseline\n  dnDelta  = computeCohorts(cfg with V&times;0.75).monthlyValue - baseline\nbarLength &prop; |upDelta| + |dnDelta|', note: 'Re-runs the full cohort valuation under each perturbation. Variables not shown have zero leverage on the model (e.g. dates).' })}
-            </div>`;
-
-        main.innerHTML = forecastCard + cahCard + tornadoCard;
+        main.innerHTML = forecastCard + cahCard;
 
         const penaltyEl = main.querySelector('.js-penalty');
         const penaltyValEl = main.querySelector('.js-penaltyVal');
@@ -772,56 +843,6 @@
         };
         penaltyEl.addEventListener('input', renderCah);
         renderCah();
-
-        const vars = [
-            { key: 'minutesPerAction', label: 'Minutes saved per action', delta: 0.25 },
-            { key: 'professionalRate', label: 'Hourly rate', delta: 0.25 },
-            { key: 'licenseCost',      label: 'License cost / user', delta: 0.25 }
-        ];
-        const swings = vars.map(v => {
-            const cfgUp = { ...cfg, [v.key]: cfg[v.key] * (1 + v.delta) };
-            const cfgDn = { ...cfg, [v.key]: cfg[v.key] * (1 - v.delta) };
-            const up = IS.computeCohorts(personIndex, sortedDates, cfgUp).totals.monthlyValue;
-            const dn = IS.computeCohorts(personIndex, sortedDates, cfgDn).totals.monthlyValue;
-            return {
-                label: v.label,
-                current: cfg[v.key],
-                up: up - baselineMonthlyValue,
-                dn: dn - baselineMonthlyValue
-            };
-        }).sort((a, b) => (Math.abs(b.up) + Math.abs(b.dn)) - (Math.abs(a.up) + Math.abs(a.dn)));
-
-        const tW = 760, rowH = 60, padLT = 220, padRT = 80;
-        const tH = swings.length * rowH + 40;
-        const innerWT = tW - padLT - padRT;
-        const maxSwing = Math.max(...swings.flatMap(s => [Math.abs(s.up), Math.abs(s.dn)]), 1);
-        const centerX = padLT + innerWT / 2;
-        const scale = (innerWT / 2) / maxSwing;
-        const tornadoLabelInk = ink('--text-primary', '#E9ECF1');
-        const tornadoAxisInk = ink('--text-tertiary', '#6C7684');
-        const tornadoUpInk = ink('--positive', '#46B77F');
-        const tornadoDnInk = ink('--negative', '#D2685F');
-        const tornadoRows = swings.map((s, i) => {
-            const y = 20 + i * rowH;
-            const dnW = Math.abs(s.dn) * scale;
-            const upW = Math.abs(s.up) * scale;
-            return `
-                <text x="${padLT - 10}" y="${y + rowH * 0.5}" fill="${tornadoLabelInk}" font-size="13" text-anchor="end">${s.label}</text>
-                <rect x="${centerX - dnW}" y="${y + rowH * 0.2}" width="${dnW.toFixed(1)}" height="${rowH * 0.6}" fill="${tornadoDnInk}" opacity="0.85"/>
-                <rect x="${centerX}" y="${y + rowH * 0.2}" width="${upW.toFixed(1)}" height="${rowH * 0.6}" fill="${tornadoUpInk}" opacity="0.85"/>
-                <text x="${centerX - dnW - 4}" y="${y + rowH * 0.55}" fill="${tornadoDnInk}" font-size="11" text-anchor="end">${IS.fmtMoneyShort(s.dn)}</text>
-                <text x="${centerX + upW + 4}" y="${y + rowH * 0.55}" fill="${tornadoUpInk}" font-size="11">+${IS.fmtMoneyShort(s.up)}</text>
-            `;
-        }).join('');
-        const axisLine = `<line x1="${centerX}" x2="${centerX}" y1="10" y2="${tH - 10}" stroke="${tornadoAxisInk}" stroke-dasharray="3,3"/>
-                          <text x="${centerX}" y="${tH - 4}" fill="${tornadoAxisInk}" font-size="11" text-anchor="middle">baseline ${IS.fmtMoneyShort(baselineMonthlyValue)}/mo</text>`;
-        main.querySelector('.js-tornadoChart').innerHTML = `
-            <div style="overflow-x:auto;">
-                <svg width="${tW}" height="${tH}" viewBox="0 0 ${tW} ${tH}" style="max-width:100%;height:auto;">
-                    ${axisLine}
-                    ${tornadoRows}
-                </svg>
-            </div>`;
     }
 
     function linearRegression(xs, ys) {
